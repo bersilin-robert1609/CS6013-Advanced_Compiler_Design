@@ -61,6 +61,8 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
    // User-generated visitor methods below
    //
 
+   Integer count = 0;
+
    /**
     * f0 -> MainClass()
     * f1 -> ( TypeDeclaration() )*
@@ -71,7 +73,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       n.f0.accept(this, argu);
       n.f1.accept(this, argu);
       n.f2.accept(this, argu);
-      return (R)(Integer)(0);
+      return (R)(count);
    }
 
    /**
@@ -326,6 +328,9 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     */
    public R visit(AssignmentStatement n, A argu) {
       R _ret=null;
+
+      count++;
+
       n.f0.accept(this, argu);
       n.f1.accept(this, argu);
       n.f2.accept(this, argu);

@@ -11,7 +11,7 @@ public class Start
             Node root = new BuritoJavaParser(System.in).Goal();
             GJDepthFirst df = new GJDepthFirst();
             Object value = root.accept(df, null);
-            System.out.println("The value is" + Integer.toString((Integer)value));
+            System.out.println("The value is " + Integer.toString((Integer)value));
         }
         catch (ParseException e)
         {
