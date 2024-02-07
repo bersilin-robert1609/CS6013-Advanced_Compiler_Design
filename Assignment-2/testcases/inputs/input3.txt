@@ -6,7 +6,7 @@ class T1
     }
 }
 
-class input1
+class input3
 {
     int a;
     int[] b;

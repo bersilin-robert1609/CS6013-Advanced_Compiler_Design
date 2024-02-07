@@ -97,11 +97,8 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
     * f2 -> <EOF>
     */
    public R visit(Goal n, A argu) 
-   {
-      ArguClass arg = new ArguClass(new String("Main"), null);
-      
+   {      
       n.f1.accept(this, argu);
-      n.f0.accept(this, (A)arg);
       return null;
    }
 
