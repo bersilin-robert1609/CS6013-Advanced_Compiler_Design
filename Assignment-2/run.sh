@@ -180,3 +180,5 @@ if [[ $notest == 0 ]]
 then
     echo "Processing done " $pass "/" $total " passed"
 fi
+
+find . -name "*.class" | xargs rm 2>/dev/null
