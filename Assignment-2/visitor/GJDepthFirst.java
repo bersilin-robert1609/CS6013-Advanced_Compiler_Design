@@ -66,6 +66,26 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
 
    HashMap<String, ClassAttrNode> classMap = new HashMap<String, ClassAttrNode>();
 
+   boolean isMethodVar(String varName, A argu)
+   {
+      ArguClass arg = (ArguClass)argu;
+      ClassAttrNode classAttrNode = classMap.get(arg.currClass);
+      MethodAttrNode methodAttrNode = classAttrNode.methodMap.get(arg.currMethod);
+
+      if(methodAttrNode.methodVarMap.containsKey(varName)) return true;
+      
+      return false;
+   }
+
+   void copySet(HashSet<String> dest, HashSet<String> src)
+   {
+      dest.clear();
+      for(String string: src)
+      {
+         dest.add(string);
+      }
+   }
+
    /**
     * f0 -> MainClass()
     * f1 -> ( TypeDeclaration() )*
@@ -348,13 +368,17 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f2 -> Expression()
     * f3 -> ";"
     */
-   public R visit(AssignmentStatement n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
+   public R visit(AssignmentStatement n, A argu) 
+   {
+      String definedName = (String)n.f0.accept(this, argu);
       n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      return _ret;
+
+      if(isMethodVar(definedName, argu))
+      {
+         ArguClass arg = (ArguClass)argu;
+         arg.definedVariables.add(definedName);
+      }
+      return null;
    }
 
    /**
@@ -366,16 +390,18 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f5 -> Expression()
     * f6 -> ";"
     */
-   public R visit(ArrayAssignmentStatement n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
+   public R visit(ArrayAssignmentStatement n, A argu) 
+   {
+      String definedName = (String)n.f0.accept(this, argu);
       n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
       n.f5.accept(this, argu);
-      n.f6.accept(this, argu);
-      return _ret;
+
+      if(isMethodVar(definedName, argu))
+      {
+         ArguClass arg = (ArguClass)argu;
+         arg.definedVariables.add(definedName);
+      }
+      return null;
    }
 
    /**
@@ -386,15 +412,11 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f4 -> Expression()
     * f5 -> ";"
     */
-   public R visit(FieldAssignmentStatement n, A argu) {
-      R _ret=null;
+   public R visit(FieldAssignmentStatement n, A argu) 
+   {
       n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
       n.f4.accept(this, argu);
-      n.f5.accept(this, argu);
-      return _ret;
+      return null;
    }
 
    /**
@@ -406,16 +428,31 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f5 -> "else"
     * f6 -> Statement()
     */
-   public R visit(IfStatement n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
+   public R visit(IfStatement n, A argu) 
+   {
       n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
+
+      ArguClass arg = (ArguClass)argu;
+      HashSet<String> originalSet = new HashSet<String>(); // has the original copy for the next statement set(else)
+      
+      copySet(originalSet, arg.definedVariables);
+
       n.f4.accept(this, argu);
-      n.f5.accept(this, argu);
+      
+      HashSet<String> changed1 = new HashSet<String>();
+      copySet(changed1, arg.definedVariables);
+      copySet(arg.definedVariables, originalSet);
+
       n.f6.accept(this, argu);
-      return _ret;
+
+      for(String string : arg.definedVariables)
+      {
+         if(!changed1.contains(string))
+         {
+            arg.definedVariables.remove(string);
+         }
+      }
+      return null;
    }
 
    /**
@@ -425,14 +462,19 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f3 -> ")"
     * f4 -> Statement()
     */
-   public R visit(WhileStatement n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
+   public R visit(WhileStatement n, A argu) 
+   {
+      ArguClass arg = (ArguClass)argu;
+      
       n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
+
+      HashSet<String> originalSet = new HashSet<String>();
+      copySet(originalSet, arg.definedVariables);
+
       n.f4.accept(this, argu);
-      return _ret;
+      copySet(arg.definedVariables, originalSet);
+
+      return null;
    }
 
    /**
@@ -450,22 +492,22 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f11 -> ")"
     * f12 -> Statement()
     */
-   public R visit(ForStatement n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
+   public R visit(ForStatement n, A argu) 
+   {
+      String definedName = (String)n.f2.accept(this, argu);
+
       n.f4.accept(this, argu);
-      n.f5.accept(this, argu);
       n.f6.accept(this, argu);
-      n.f7.accept(this, argu);
-      n.f8.accept(this, argu);
-      n.f9.accept(this, argu);
       n.f10.accept(this, argu);
-      n.f11.accept(this, argu);
+
+      if(isMethodVar(definedName, argu))
+      {
+         ArguClass arg = (ArguClass)argu;
+         arg.definedVariables.add(definedName);
+      }
+
       n.f12.accept(this, argu);
-      return _ret;
+      return null;
    }
 
    /**
@@ -475,14 +517,10 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f3 -> ")"
     * f4 -> ";"
     */
-   public R visit(PrintStatement n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
+   public R visit(PrintStatement n, A argu) 
+   {
       n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      return _ret;
+      return null;
    }
 
    /**
@@ -496,10 +534,10 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     *       | MessageSend()
     *       | PrimaryExpression()
     */
-   public R visit(Expression n, A argu) {
-      R _ret=null;
+   public R visit(Expression n, A argu) 
+   {
       n.f0.accept(this, argu);
-      return _ret;
+      return null;
    }
 
    /**
@@ -507,12 +545,11 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> "&"
     * f2 -> PrimaryExpression()
     */
-   public R visit(AndExpression n, A argu) {
-      R _ret=null;
+   public R visit(AndExpression n, A argu) 
+   {
       n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
       n.f2.accept(this, argu);
-      return _ret;
+      return null;
    }
 
    /**
@@ -520,12 +557,11 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> "<"
     * f2 -> PrimaryExpression()
     */
-   public R visit(CompareExpression n, A argu) {
-      R _ret=null;
+   public R visit(CompareExpression n, A argu) 
+   {
       n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
       n.f2.accept(this, argu);
-      return _ret;
+      return null;
    }
 
    /**
@@ -533,12 +569,11 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> "+"
     * f2 -> PrimaryExpression()
     */
-   public R visit(PlusExpression n, A argu) {
-      R _ret=null;
+   public R visit(PlusExpression n, A argu)
+   {
       n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
       n.f2.accept(this, argu);
-      return _ret;
+      return null;
    }
 
    /**
@@ -546,12 +581,11 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> "-"
     * f2 -> PrimaryExpression()
     */
-   public R visit(MinusExpression n, A argu) {
-      R _ret=null;
+   public R visit(MinusExpression n, A argu) \
+   {
       n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
       n.f2.accept(this, argu);
-      return _ret;
+      return null;
    }
 
    /**
@@ -559,12 +593,11 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> "*"
     * f2 -> PrimaryExpression()
     */
-   public R visit(TimesExpression n, A argu) {
-      R _ret=null;
+   public R visit(TimesExpression n, A argu) 
+   {
       n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
       n.f2.accept(this, argu);
-      return _ret;
+      return null;
    }
 
    /**
@@ -573,13 +606,11 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f2 -> PrimaryExpression()
     * f3 -> "]"
     */
-   public R visit(ArrayLookup n, A argu) {
-      R _ret=null;
+   public R visit(ArrayLookup n, A argu)
+   {
       n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
       n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      return _ret;
+      return null;
    }
 
    /**
@@ -587,12 +618,10 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> "."
     * f2 -> "length"
     */
-   public R visit(ArrayLength n, A argu) {
-      R _ret=null;
+   public R visit(ArrayLength n, A argu) 
+   {
       n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+      return null;
    }
 
    /**
@@ -603,7 +632,8 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f4 -> ( ExpressionList() )?
     * f5 -> ")"
     */
-   public R visit(MessageSend n, A argu) {
+   public R visit(MessageSend n, A argu) 
+   {
       R _ret=null;
       n.f0.accept(this, argu);
       n.f1.accept(this, argu);
@@ -760,10 +790,13 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       String currClass;
       String currMethod;
 
+      HashSet<String> definedVariables;
+
       ArguClass(String className, String methodName)
       {
          this.currClass = className;
          this.currMethod = methodName;
+         this.definedVariables = new HashSet<String>();
       }
    }
 
