@@ -17,9 +17,16 @@ class input1
         int c;
         int d;
         int e;
-        e = d + c; // Error: d and c are not initialized
-        d = c + 1; //Error: c is not initialized
-        c = 1;
-        return c;
+        
+        for(e = 3; e < 4; e = e+1)
+        {
+            d = 1;
+            c = 2;
+            e = 4;
+        }
+
+        a = e;  // Valid
+        // b = d;
+        return 0;
     }
 }
