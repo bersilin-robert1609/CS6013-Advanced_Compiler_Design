@@ -503,8 +503,8 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
       }
       
       n.f6.accept(this, argu);
-      n.f10.accept(this, argu);
       n.f12.accept(this, argu);
+      n.f10.accept(this, argu);
 
       copySet(arg.definedVariables, tempSet);
       return null;

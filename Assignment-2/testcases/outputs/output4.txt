@@ -1,1 +1,1 @@
-Uninitialized variable found.
+No uninitialized variables.
