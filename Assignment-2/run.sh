@@ -104,7 +104,7 @@ function testBuritoJava {
 
         if [[ $notest == 0 ]]
         then
-            if [[ $(cat $dir/output/$type/$file_name) == $correct ]]
+            if [[ $(cat $outputdir/output/$type/$file_name) == $correct ]]
             then
                 pass=$((pass+1))
                 echo -e "----->" "${green}Noice${clear}"
