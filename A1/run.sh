@@ -40,7 +40,7 @@ debug=0
 notest=0
 clear_f=1
 set_dir=0
-dir="../../Test/Assignment2"
+dir="../../../Test/Assignment2"
 files=()
 set_regex=0
 regexes=()
@@ -288,6 +288,7 @@ function displayCompile {
 # display compile animation
 displayCompile &
 compile_pid=$!
+cd P1
 
 # all preprocess before testing
 find . -name "*.class" | xargs rm 2>/dev/null

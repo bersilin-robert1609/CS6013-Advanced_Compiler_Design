@@ -61,8 +61,6 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
    // User-generated visitor methods below
    //
 
-   Integer count = 0;
-
    /**
     * f0 -> MainClass()
     * f1 -> ( TypeDeclaration() )*
@@ -73,7 +71,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       n.f0.accept(this, argu);
       n.f1.accept(this, argu);
       n.f2.accept(this, argu);
-      return (R)(count);
+      return _ret;
    }
 
    /**
@@ -328,9 +326,6 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     */
    public R visit(AssignmentStatement n, A argu) {
       R _ret=null;
-
-      count++;
-
       n.f0.accept(this, argu);
       n.f1.accept(this, argu);
       n.f2.accept(this, argu);
@@ -733,6 +728,100 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       n.f1.accept(this, argu);
       n.f2.accept(this, argu);
       return _ret;
+   }
+
+   class ClassAttrNode
+   {
+      int methodCount;
+      int varCount;
+      HashMap<String, MethodAttrNode> methodMap;
+      HashMap<String, VarAttrNode> varMap;
+
+      String parent;
+      String selfName;
+
+      ClassAttrNode(String className, String parentName)
+      {
+         this.selfName = className;
+         this.parent = parentName;
+         this.methodMap = new HashMap<String, MethodAttrNode>();
+         this.varMap = new HashMap<String, VarAttrNode>();
+         this.methodCount = 0;
+         this.varCount = 0;
+      }
+
+      void addVar(String varName, String typeName)
+      {
+         this.varCount++;
+         this.varMap.put(varName, new VarAttrNode(varName, typeName));
+      }
+
+      void addMethod(String methodName, String className, String returnType)
+      {
+         MethodAttrNode methodAttrNode = new MethodAttrNode(methodName, className, returnType);
+         this.methodMap.put(methodName, methodAttrNode);
+         this.methodCount++;
+      }
+   }
+
+   class MethodAttrNode
+   {
+      String methodName;
+      String className;
+      int methodVarCount;
+      int paramCount;
+      HashMap<String, ParamAttrNode> paramMap;
+      HashMap<String, VarAttrNode> methodVarMap;
+      String returnType;
+
+      MethodAttrNode(String methodName, String className, String returnType)
+      {
+         this.methodName = methodName;
+         this.className = className;
+         this.returnType = returnType;
+
+         this.paramMap = new HashMap<String, ParamAttrNode>();
+         this.methodVarMap = new HashMap<String, VarAttrNode>();
+
+         this.methodVarCount = 0;
+         this.paramCount = 0;
+      }
+
+      void addParam(String paramName, String type)
+      {
+         this.paramCount++;
+         this.paramMap.put(paramName, new ParamAttrNode(paramName, type));
+      }
+
+      void addVar(String varName, String type)
+      {
+         this.methodVarCount++;
+         this.methodVarMap.put(varName, new VarAttrNode(varName, type));
+      }
+   }
+
+   class VarAttrNode
+   {
+      String varName;
+      String type;
+
+      VarAttrNode(String varName, String type)
+      {
+         this.varName = varName;
+         this.type = type;
+      }
+   }
+
+   class ParamAttrNode 
+   {
+      String paramName;
+      String type;
+
+      ParamAttrNode(String paraString, String type)
+      {
+         this.paramName = paraString;
+         this.type = type;
+      }
    }
 
 }
