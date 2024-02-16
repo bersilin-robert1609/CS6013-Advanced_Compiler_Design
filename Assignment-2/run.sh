@@ -324,6 +324,6 @@ else
         # cd ..
         find . -name "*.class" | xargs rm 2>/dev/null
         # cd P1
-        rm -rf $dir/mine/pos/* $dir/mine/neg/*
+        # rm -rf $dir/mine/pos/* $dir/mine/neg/*
     fi
 fi
