@@ -5,6 +5,7 @@
 package visitor;
 import syntaxtree.*;
 import java.util.*;
+import attributes.*;
 
 /**
  * Provides default methods which visit each node in the tree in depth-first
@@ -62,16 +63,46 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
    //
 
    /**
+    * Symbol Table for the BuritoJava program
+    */
+   HashMap<String, ClassAttrNode> symbolTable = new HashMap<String, ClassAttrNode>();
+   HashSet<String> usedIdentifiers = new HashSet<>();
+
+   int tempCount = -1;
+   boolean firstPass = true;
+
+   String getNextTemp()
+   {
+      tempCount++;
+      String newTemp = "__t" + tempCount;
+      while(usedIdentifiers.contains(newTemp))
+      {
+         tempCount++;
+         newTemp = "__t" + tempCount;
+      }
+      return newTemp;
+   }
+
+   void Out(String s)
+   {
+      System.out.println(s);
+   }
+
+   /**
     * f0 -> MainClass()
     * f1 -> ( TypeDeclaration() )*
     * f2 -> <EOF>
     */
-   public R visit(Goal n, A argu) {
-      R _ret=null;
+   public R visit(Goal n, A argu) 
+   {
       n.f0.accept(this, argu);
       n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+
+      firstPass = false;
+
+      n.f0.accept(this, argu);
+      n.f1.accept(this, argu);
+      return null;
    }
 
    /**
@@ -93,36 +124,55 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f15 -> "}"
     * f16 -> "}"
     */
-   public R visit(MainClass n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      n.f5.accept(this, argu);
-      n.f6.accept(this, argu);
-      n.f7.accept(this, argu);
-      n.f8.accept(this, argu);
-      n.f9.accept(this, argu);
-      n.f10.accept(this, argu);
-      n.f11.accept(this, argu);
-      n.f12.accept(this, argu);
-      n.f13.accept(this, argu);
-      n.f14.accept(this, argu);
-      n.f15.accept(this, argu);
-      n.f16.accept(this, argu);
-      return _ret;
+   public R visit(MainClass n, A argu) 
+   {
+      if(firstPass)
+      {
+         String className = (String)n.f1.accept(this, argu);
+         usedIdentifiers.add(className);
+
+         String paramName = (String)n.f11.accept(this, argu);
+         usedIdentifiers.add(paramName);
+
+         ClassAttrNode classAttrNode = new ClassAttrNode(className, null);
+         symbolTable.put(className, classAttrNode);
+
+         symbolTable.get(className).addMethod("main", className, "void");
+         symbolTable.get(className).methodMap.get("main").addParam(paramName, "String[]");
+      }
+      else
+      {
+         String className = (String)n.f1.accept(this, argu);
+         String paramName = (String)n.f11.accept(this, argu);
+
+         String s1 = "class " + className;
+         String s2 = "public static void main(String[] " + paramName + ")";
+
+         ArguClass arguClass = new ArguClass();
+         arguClass.currClass = className;
+         arguClass.currMethod = "main";
+
+         StmtReturn stmtReturn = (StmtReturn)n.f14.accept(this, argu);
+
+         String varDecls = "";
+         for(String varName : stmtReturn.usedTemps.keySet())
+         {
+            varDecls += stmtReturn.usedTemps.get(varName) + " " + varName + ";\n";
+         }
+
+         Out(s1 + "\n{\n" + s2 + "\n{\n" + varDecls + stmtReturn.printString + "}\n}\n");
+      }
+      return null;
    }
 
    /**
     * f0 -> ClassDeclaration()
     *       | ClassExtendsDeclaration()
     */
-   public R visit(TypeDeclaration n, A argu) {
-      R _ret=null;
+   public R visit(TypeDeclaration n, A argu) 
+   {
       n.f0.accept(this, argu);
-      return _ret;
+      return null;
    }
 
    /**
@@ -133,15 +183,41 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f4 -> ( MethodDeclaration() )*
     * f5 -> "}"
     */
-   public R visit(ClassDeclaration n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      n.f5.accept(this, argu);
-      return _ret;
+   public R visit(ClassDeclaration n, A argu) 
+   {
+      String className = (String)n.f1.accept(this, argu);
+
+      ArguClass arguClass = new ArguClass();
+      arguClass.currClass = className;
+      arguClass.currMethod = null;
+
+      if(firstPass)
+      {
+         usedIdentifiers.add(className);
+   
+         ClassAttrNode classAttrNode = new ClassAttrNode(className, null);
+         symbolTable.put(className, classAttrNode);
+
+         n.f3.accept(this, (A)arguClass);
+      }
+      else
+      {
+         String s1 = "class " + className;
+
+         String varDecls = "";
+         for(String varName : symbolTable.get(className).varMap.keySet())
+         {
+            VarAttrNode varAttrNode = symbolTable.get(className).varMap.get(varName);
+            varDecls += varAttrNode.type + " " + varName + ";\n";
+         }
+
+         Out(s1 + "\n{\n" + varDecls);
+
+         n.f4.accept(this, (A)arguClass);
+
+         Out("}\n");
+      }
+      return null;
    }
 
    /**
@@ -154,17 +230,43 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f6 -> ( MethodDeclaration() )*
     * f7 -> "}"
     */
-   public R visit(ClassExtendsDeclaration n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      n.f5.accept(this, argu);
-      n.f6.accept(this, argu);
-      n.f7.accept(this, argu);
-      return _ret;
+   public R visit(ClassExtendsDeclaration n, A argu) 
+   {
+      String className = (String)n.f1.accept(this, argu);
+      String parentName = (String)n.f3.accept(this, argu);
+
+      ArguClass arguClass = new ArguClass();
+      arguClass.currClass = className;
+      arguClass.currMethod = null;
+
+      if(firstPass)
+      {
+         usedIdentifiers.add(className);
+         usedIdentifiers.add(parentName);
+
+         ClassAttrNode classAttrNode = new ClassAttrNode(className, parentName);
+         symbolTable.put(className, classAttrNode);
+
+         n.f5.accept(this, (A)arguClass);
+      }
+      else
+      {
+         String s1 = "class " + className + " extends " + parentName;
+
+         String varDecls = "";
+         for(String varName : symbolTable.get(className).varMap.keySet())
+         {
+            VarAttrNode varAttrNode = symbolTable.get(className).varMap.get(varName);
+            varDecls += varAttrNode.type + " " + varName + ";\n";
+         }
+
+         Out(s1 + "\n{\n" + varDecls);
+
+         n.f6.accept(this, (A)arguClass);
+
+         Out("}\n");
+      }
+      return null;
    }
 
    /**
@@ -172,12 +274,23 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> Identifier()
     * f2 -> ";"
     */
-   public R visit(VarDeclaration n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(VarDeclaration n, A argu) 
+   {
+      ArguClass arguClass = (ArguClass)argu;
+      String varType = (String)n.f0.accept(this, argu);
+      String varName = (String)n.f1.accept(this, argu);
+
+      usedIdentifiers.add(varName);
+
+      if (arguClass.currMethod == null)
+      {
+         symbolTable.get(arguClass.currClass).addVar(varName, varType);
+      }
+      else
+      {
+         symbolTable.get(arguClass.currClass).methodMap.get(arguClass.currMethod).addVar(varName, varType);
+      }
+      return null;
    }
 
    /**
@@ -195,22 +308,73 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f11 -> ";"
     * f12 -> "}"
     */
-   public R visit(MethodDeclaration n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      n.f5.accept(this, argu);
-      n.f6.accept(this, argu);
-      n.f7.accept(this, argu);
-      n.f8.accept(this, argu);
-      n.f9.accept(this, argu);
-      n.f10.accept(this, argu);
-      n.f11.accept(this, argu);
-      n.f12.accept(this, argu);
-      return _ret;
+   public R visit(MethodDeclaration n, A argu) 
+   {
+      ArguClass arguClass = (ArguClass)argu;
+      String returnType = (String)n.f1.accept(this, argu);
+      String methodName = (String)n.f2.accept(this, argu);
+
+      arguClass.currMethod = methodName;
+
+      if(firstPass)
+      {
+         usedIdentifiers.add(methodName);
+
+         symbolTable.get(arguClass.currClass).addMethod(methodName, arguClass.currClass, returnType);
+
+         n.f4.accept(this, (A)arguClass);
+         n.f7.accept(this, (A)arguClass);
+      }
+      else
+      {
+         String paramList = "";
+         for(String paramName : symbolTable.get(arguClass.currClass).methodMap.get(methodName).paramMap.keySet())
+         {
+            ParamAttrNode paramAttrNode = symbolTable.get(arguClass.currClass).methodMap.get(methodName).paramMap.get(paramName);
+            paramList += paramAttrNode.type + " " + paramName + ", ";
+         }
+
+         // Removes the comma and space at the end of the string
+         if(paramList.length() > 0) paramList = paramList.substring(0, paramList.length() - 2);
+         
+         HashMap<String, String> usedTemps = new HashMap<String, String>();
+         String stmtString = "";
+
+         for (int i = 0; i < n.f8.size(); i++)
+         {
+            StmtReturn stmtReturn = (StmtReturn)n.f8.elementAt(i).accept(this, (A)arguClass);
+            stmtString += stmtReturn.printString + "\n\n";
+            usedTemps.putAll(stmtReturn.usedTemps);
+         }
+         
+         ExprReturn exprReturn = (ExprReturn)n.f10.accept(this, (A)arguClass);
+         
+         String varDecls = "";
+         for(String varName: symbolTable.get(arguClass.currClass).methodMap.get(methodName).methodVarMap.keySet())
+         {
+            VarAttrNode varAttrNode = symbolTable.get(arguClass.currClass).methodMap.get(methodName).methodVarMap.get(varName);
+            varDecls += varAttrNode.type + " " + varName + ";\n";
+         }
+         
+         for(String varName : usedTemps.keySet())
+         {
+            varDecls += usedTemps.get(varName) + " " + varName + ";\n";
+         }
+         
+         for(String varName : exprReturn.usedTemps.keySet())
+         {
+            varDecls += exprReturn.usedTemps.get(varName) + " " + varName + ";\n";
+         }
+
+         stmtString += exprReturn.printString + "\n";
+
+         Out("public " + returnType + " " + methodName + "(" + paramList + ")\n");
+         Out("{\n" + varDecls + stmtString);
+
+         Out("return " + exprReturn.returnTemp + ";\n}\n");
+      }
+
+      return null;
    }
 
    /**
@@ -623,7 +787,8 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     *       | NotExpression()
     *       | BracketExpression()
     */
-   public R visit(PrimaryExpression n, A argu) {
+   public R visit(PrimaryExpression n, A argu) 
+   {
       R _ret=null;
       n.f0.accept(this, argu);
       return _ret;
@@ -632,46 +797,41 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
    /**
     * f0 -> <INTEGER_LITERAL>
     */
-   public R visit(IntegerLiteral n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(IntegerLiteral n, A argu) 
+   {
+      return (R)(n.f0.tokenImage);
    }
 
    /**
     * f0 -> "true"
     */
-   public R visit(TrueLiteral n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(TrueLiteral n, A argu) 
+   {
+      return (R)(n.f0.tokenImage);
    }
 
    /**
     * f0 -> "false"
     */
-   public R visit(FalseLiteral n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(FalseLiteral n, A argu) 
+   {
+      return (R)(n.f0.tokenImage);
    }
 
    /**
     * f0 -> <IDENTIFIER>
     */
-   public R visit(Identifier n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(Identifier n, A argu) 
+   {
+      return (R)(n.f0.tokenImage);
    }
 
    /**
     * f0 -> "this"
     */
-   public R visit(ThisExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(ThisExpression n, A argu) 
+   {
+      return (R)(n.f0.tokenImage);
    }
 
    /**
@@ -729,99 +889,4 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       n.f2.accept(this, argu);
       return _ret;
    }
-
-   class ClassAttrNode
-   {
-      int methodCount;
-      int varCount;
-      HashMap<String, MethodAttrNode> methodMap;
-      HashMap<String, VarAttrNode> varMap;
-
-      String parent;
-      String selfName;
-
-      ClassAttrNode(String className, String parentName)
-      {
-         this.selfName = className;
-         this.parent = parentName;
-         this.methodMap = new HashMap<String, MethodAttrNode>();
-         this.varMap = new HashMap<String, VarAttrNode>();
-         this.methodCount = 0;
-         this.varCount = 0;
-      }
-
-      void addVar(String varName, String typeName)
-      {
-         this.varCount++;
-         this.varMap.put(varName, new VarAttrNode(varName, typeName));
-      }
-
-      void addMethod(String methodName, String className, String returnType)
-      {
-         MethodAttrNode methodAttrNode = new MethodAttrNode(methodName, className, returnType);
-         this.methodMap.put(methodName, methodAttrNode);
-         this.methodCount++;
-      }
-   }
-
-   class MethodAttrNode
-   {
-      String methodName;
-      String className;
-      int methodVarCount;
-      int paramCount;
-      HashMap<String, ParamAttrNode> paramMap;
-      HashMap<String, VarAttrNode> methodVarMap;
-      String returnType;
-
-      MethodAttrNode(String methodName, String className, String returnType)
-      {
-         this.methodName = methodName;
-         this.className = className;
-         this.returnType = returnType;
-
-         this.paramMap = new HashMap<String, ParamAttrNode>();
-         this.methodVarMap = new HashMap<String, VarAttrNode>();
-
-         this.methodVarCount = 0;
-         this.paramCount = 0;
-      }
-
-      void addParam(String paramName, String type)
-      {
-         this.paramCount++;
-         this.paramMap.put(paramName, new ParamAttrNode(paramName, type));
-      }
-
-      void addVar(String varName, String type)
-      {
-         this.methodVarCount++;
-         this.methodVarMap.put(varName, new VarAttrNode(varName, type));
-      }
-   }
-
-   class VarAttrNode
-   {
-      String varName;
-      String type;
-
-      VarAttrNode(String varName, String type)
-      {
-         this.varName = varName;
-         this.type = type;
-      }
-   }
-
-   class ParamAttrNode 
-   {
-      String paramName;
-      String type;
-
-      ParamAttrNode(String paraString, String type)
-      {
-         this.paramName = paraString;
-         this.type = type;
-      }
-   }
-
 }
