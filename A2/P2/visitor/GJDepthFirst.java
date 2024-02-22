@@ -88,6 +88,40 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       System.out.println(s);
    }
 
+   String getType(String identifier, ArguClass argu)
+   {
+      String currClass = argu.currClass;
+      String currMethod = argu.currMethod;
+
+      if(symbolTable.get(currClass).methodMap.get(currMethod).methodVarMap.containsKey(identifier))
+      {
+         return symbolTable.get(currClass).methodMap.get(currMethod).methodVarMap.get(identifier).type;
+      }
+      else if(symbolTable.get(currClass).methodMap.get(currMethod).paramMap.containsKey(identifier))
+      {
+         return symbolTable.get(currClass).methodMap.get(currMethod).paramMap.get(identifier).type;
+      }
+      else if(symbolTable.get(currClass).varMap.containsKey(identifier))
+      {
+         return symbolTable.get(currClass).varMap.get(identifier).type;
+      }
+      else
+      {
+         while(symbolTable.get(currClass).parent != null)
+         {
+            String parentClass = symbolTable.get(currClass).parent;
+            if(symbolTable.get(parentClass).varMap.containsKey(identifier))
+            {
+               return symbolTable.get(parentClass).varMap.get(identifier).type;
+            }
+            currClass = symbolTable.get(parentClass).parent;
+         }
+      }
+
+      assert(true); // Code should never reach here
+      return null;
+   }
+
    /**
     * f0 -> MainClass()
     * f1 -> ( TypeDeclaration() )*
@@ -152,7 +186,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          arguClass.currClass = className;
          arguClass.currMethod = "main";
 
-         StmtReturn stmtReturn = (StmtReturn)n.f14.accept(this, argu);
+         StmtReturn stmtReturn = (StmtReturn)n.f14.accept(this, (A)arguClass);
 
          String varDecls = "";
          for(String varName : stmtReturn.usedTemps.keySet())
@@ -160,7 +194,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
             varDecls += stmtReturn.usedTemps.get(varName) + " " + varName + ";\n";
          }
 
-         Out(s1 + "\n{\n" + s2 + "\n{\n" + varDecls + stmtReturn.printString + "}\n}\n");
+         Out(s1 + "\n{\n" + s2 + "\n{\n" + varDecls + "\n" + stmtReturn.printString + "}\n}\n");
       }
       return null;
    }
@@ -381,7 +415,8 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f0 -> FormalParameter()
     * f1 -> ( FormalParameterRest() )*
     */
-   public R visit(FormalParameterList n, A argu) {
+   public R visit(FormalParameterList n, A argu) 
+   {
       R _ret=null;
       n.f0.accept(this, argu);
       n.f1.accept(this, argu);
@@ -392,22 +427,26 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f0 -> Type()
     * f1 -> Identifier()
     */
-   public R visit(FormalParameter n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      return _ret;
+   public R visit(FormalParameter n, A argu) 
+   {
+      ArguClass arguClass = (ArguClass)argu;
+      String paramType = (String)n.f0.accept(this, argu);
+      String paramName = (String)n.f1.accept(this, argu);
+
+      usedIdentifiers.add(paramName);
+
+      symbolTable.get(arguClass.currClass).methodMap.get(arguClass.currMethod).addParam(paramName, paramType);
+      return null;
    }
 
    /**
     * f0 -> ","
     * f1 -> FormalParameter()
     */
-   public R visit(FormalParameterRest n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
+   public R visit(FormalParameterRest n, A argu) 
+   {
       n.f1.accept(this, argu);
-      return _ret;
+      return null;
    }
 
    /**
@@ -416,10 +455,9 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     *       | IntegerType()
     *       | Identifier()
     */
-   public R visit(Type n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(Type n, A argu) 
+   {
+      return (R)n.f0.accept(this, argu);
    }
 
    /**
@@ -427,30 +465,25 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> "["
     * f2 -> "]"
     */
-   public R visit(ArrayType n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(ArrayType n, A argu) 
+   {
+      return (R)(n.f0.tokenImage + n.f1.tokenImage + n.f2.tokenImage);
    }
 
    /**
     * f0 -> "boolean"
     */
-   public R visit(BooleanType n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(BooleanType n, A argu) 
+   {
+      return (R)n.f0.tokenImage;
    }
 
    /**
     * f0 -> "int"
     */
-   public R visit(IntegerType n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(IntegerType n, A argu) 
+   {
+      return (R)n.f0.tokenImage;
    }
 
    /**
@@ -636,10 +669,9 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     *       | MessageSend()
     *       | PrimaryExpression()
     */
-   public R visit(Expression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(Expression n, A argu) 
+   {
+      return (R)n.f0.accept(this, argu);
    }
 
    /**
@@ -647,12 +679,20 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> "&"
     * f2 -> PrimaryExpression()
     */
-   public R visit(AndExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(AndExpression n, A argu) 
+   {
+      ExprReturn exprReturn1 = (ExprReturn)n.f0.accept(this, argu);
+      ExprReturn exprReturn2 = (ExprReturn)n.f2.accept(this, argu);
+
+      String newTemp = getNextTemp();
+      exprReturn1.printString += exprReturn2.printString;
+      exprReturn1.printString += newTemp + " = " + exprReturn1.returnTemp + " & " + exprReturn2.returnTemp + ";\n";
+
+      exprReturn1.returnTemp = newTemp;
+      exprReturn1.returnType = "boolean";
+      exprReturn1.usedTemps.put(exprReturn1.returnTemp, exprReturn1.returnType);
+
+      return (R)exprReturn1;
    }
 
    /**
@@ -660,12 +700,20 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> "<"
     * f2 -> PrimaryExpression()
     */
-   public R visit(CompareExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(CompareExpression n, A argu) 
+   {
+      ExprReturn exprReturn1 = (ExprReturn)n.f0.accept(this, argu);
+      ExprReturn exprReturn2 = (ExprReturn)n.f2.accept(this, argu);
+
+      String newTemp = getNextTemp();
+      exprReturn1.printString += exprReturn2.printString;
+      exprReturn1.printString += newTemp + " = " + exprReturn1.returnTemp + " < " + exprReturn2.returnTemp + ";\n";
+
+      exprReturn1.returnTemp = newTemp;
+      exprReturn1.returnType = "boolean";
+      exprReturn1.usedTemps.put(exprReturn1.returnTemp, exprReturn1.returnType);
+
+      return (R)exprReturn1;
    }
 
    /**
@@ -673,12 +721,20 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> "+"
     * f2 -> PrimaryExpression()
     */
-   public R visit(PlusExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(PlusExpression n, A argu) 
+   {
+      ExprReturn exprReturn1 = (ExprReturn)n.f0.accept(this, argu);
+      ExprReturn exprReturn2 = (ExprReturn)n.f2.accept(this, argu);
+
+      String newTemp = getNextTemp();
+      exprReturn1.printString += exprReturn2.printString;
+      exprReturn1.printString += newTemp + " = " + exprReturn1.returnTemp + " + " + exprReturn2.returnTemp + ";\n";
+
+      exprReturn1.returnTemp = newTemp;
+      exprReturn1.returnType = "int";
+      exprReturn1.usedTemps.put(exprReturn1.returnTemp, exprReturn1.returnType);
+
+      return (R)exprReturn1;
    }
 
    /**
@@ -686,12 +742,20 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> "-"
     * f2 -> PrimaryExpression()
     */
-   public R visit(MinusExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(MinusExpression n, A argu) 
+   {
+      ExprReturn exprReturn1 = (ExprReturn)n.f0.accept(this, argu);
+      ExprReturn exprReturn2 = (ExprReturn)n.f2.accept(this, argu);
+
+      String newTemp = getNextTemp();
+      exprReturn1.printString += exprReturn2.printString;
+      exprReturn1.printString += newTemp + " = " + exprReturn1.returnTemp + " - " + exprReturn2.returnTemp + ";\n";
+
+      exprReturn1.returnTemp = newTemp;
+      exprReturn1.returnType = "int";
+      exprReturn1.usedTemps.put(exprReturn1.returnTemp, exprReturn1.returnType);
+
+      return (R)exprReturn1;
    }
 
    /**
@@ -699,12 +763,20 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> "*"
     * f2 -> PrimaryExpression()
     */
-   public R visit(TimesExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(TimesExpression n, A argu) 
+   {
+      ExprReturn exprReturn1 = (ExprReturn)n.f0.accept(this, argu);
+      ExprReturn exprReturn2 = (ExprReturn)n.f2.accept(this, argu);
+
+      String newTemp = getNextTemp();
+      exprReturn1.printString += exprReturn2.printString;
+      exprReturn1.printString += newTemp + " = " + exprReturn1.returnTemp + " * " + exprReturn2.returnTemp + ";\n";
+
+      exprReturn1.returnTemp = newTemp;
+      exprReturn1.returnType = "int";
+      exprReturn1.usedTemps.put(exprReturn1.returnTemp, exprReturn1.returnType);
+
+      return (R)exprReturn1;
    }
 
    /**
@@ -713,13 +785,21 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f2 -> PrimaryExpression()
     * f3 -> "]"
     */
-   public R visit(ArrayLookup n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      return _ret;
+   public R visit(ArrayLookup n, A argu) 
+   {
+      ExprReturn exprReturn1 = (ExprReturn)n.f0.accept(this, argu);
+      ExprReturn exprReturn2 = (ExprReturn)n.f2.accept(this, argu);
+
+      String newTemp = getNextTemp();
+      
+      exprReturn1.printString += exprReturn2.printString;
+      exprReturn1.printString += newTemp + " = " + exprReturn1.returnTemp + " [ " + exprReturn2.returnTemp + " ];\n";
+
+      exprReturn1.returnTemp = newTemp;
+      exprReturn1.returnType = "int";
+      exprReturn1.usedTemps.put(exprReturn1.returnTemp, exprReturn1.returnType);
+
+      return (R)exprReturn1;
    }
 
    /**
@@ -727,12 +807,18 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> "."
     * f2 -> "length"
     */
-   public R visit(ArrayLength n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(ArrayLength n, A argu) 
+   {
+      ExprReturn exprReturn = (ExprReturn)n.f0.accept(this, argu);
+      String newTemp = getNextTemp();
+
+      exprReturn.printString += newTemp + " = " + exprReturn.returnTemp + " . length;\n";
+
+      exprReturn.returnTemp = newTemp;
+      exprReturn.returnType = "int";
+      exprReturn.usedTemps.put(exprReturn.returnTemp, exprReturn.returnType);
+
+      return (R)exprReturn;
    }
 
    /**
@@ -743,37 +829,62 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f4 -> ( ExpressionList() )?
     * f5 -> ")"
     */
-   public R visit(MessageSend n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      n.f5.accept(this, argu);
-      return _ret;
+   public R visit(MessageSend n, A argu) 
+   {
+      ExprReturn exprReturn = (ExprReturn)n.f0.accept(this, argu);
+      String methodName = (String)n.f2.accept(this, argu);
+
+      String className = exprReturn.returnType;
+
+      String methodReturnType = symbolTable.get(className).methodMap.get(methodName).returnType;
+      ArrayList<ExprReturn> exprList = (ArrayList<ExprReturn>)n.f4.accept(this, argu);
+
+      for(int i=0; i<exprList.size(); i++)
+      {
+         exprReturn.printString += exprList.get(i).printString;
+      }
+
+      String newTemp = getNextTemp();
+      exprReturn.printString += newTemp + " = " + exprReturn.returnTemp + " . " + methodName + "( ";
+      for(int i=0; i<exprList.size(); i++)
+      {
+         exprReturn.printString += exprList.get(i).returnTemp;
+         if(i != exprList.size() - 1) exprReturn.printString += ", ";
+      }
+
+      exprReturn.printString += " );\n";
+      
+      exprReturn.returnTemp = newTemp;
+      exprReturn.returnType = methodReturnType;
+      exprReturn.usedTemps.put(newTemp, methodReturnType);
+
+      return (R)exprReturn;
    }
 
    /**
     * f0 -> Expression()
     * f1 -> ( ExpressionRest() )*
     */
-   public R visit(ExpressionList n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      return _ret;
+   public R visit(ExpressionList n, A argu) 
+   {
+      ArrayList<ExprReturn> exprList = new ArrayList<ExprReturn>();
+      exprList.add((ExprReturn)(n.f0.accept(this, argu)));
+
+      for(int i=0; i<n.f1.size(); i++)
+      {
+         exprList.add((ExprReturn)(n.f1.elementAt(i).accept(this, argu)));
+      }
+
+      return (R)(exprList);
    }
 
    /**
     * f0 -> ","
     * f1 -> Expression()
     */
-   public R visit(ExpressionRest n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      return _ret;
+   public R visit(ExpressionRest n, A argu) 
+   {
+      return (R)n.f1.accept(this, argu);
    }
 
    /**
@@ -789,9 +900,36 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     */
    public R visit(PrimaryExpression n, A argu) 
    {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+      // String type = "";
+      // String newTemp = getNextTemp();
+      // ArguClass arguClass = (ArguClass)argu;
+      // String printString = "";
+      // switch(n.f0.which)
+      // {
+      //    case 0:
+      //       printString = newTemp + " = " + (String)n.f0.accept(this, argu) + ";\n";
+      //       type = "int";
+      //       break;
+      //    case 1:
+      //       printString = newTemp + " = " + (String)n.f0.accept(this, argu) + ";\n";
+      //       type = "boolean";
+      //       break;
+      //    case 2:
+      //       printString = newTemp + " = " + (String)n.f0.accept(this, argu) + ";\n";
+      //       type = "boolean";
+      //       break;
+      //    case 3:
+      //       String identifier = (String)n.f0.accept(this, argu);
+      //       type = getType(identifier, arguClass);
+      //       printString = newTemp + " = " + identifier + ";\n";
+      //       break;
+      //    case 4:
+      //       type = arguClass.currClass;
+      //       break;
+      // }
+
+
+      return null;
    }
 
    /**
@@ -857,7 +995,8 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f2 -> "("
     * f3 -> ")"
     */
-   public R visit(AllocationExpression n, A argu) {
+   public R visit(AllocationExpression n, A argu) 
+   {
       R _ret=null;
       n.f0.accept(this, argu);
       n.f1.accept(this, argu);
@@ -868,13 +1007,21 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
 
    /**
     * f0 -> "!"
-    * f1 -> ( MessageSend() | PrimaryExpression() )
+    * f1 -> MessageSend() 
+    *    |  PrimaryExpression()
     */
-   public R visit(NotExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      return _ret;
+   public R visit(NotExpression n, A argu) 
+   {
+      ExprReturn exprReturn = (ExprReturn)n.f1.accept(this, argu);
+      String newTemp = getNextTemp();
+
+      exprReturn.printString += newTemp + " = ! " + exprReturn.returnTemp + ";\n";
+      exprReturn.usedTemps.put(exprReturn.returnTemp, exprReturn.returnType);
+
+      exprReturn.returnTemp = newTemp;
+      exprReturn.returnType = "boolean";
+
+      return (R)exprReturn;
    }
 
    /**
@@ -882,11 +1029,8 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> Expression()
     * f2 -> ")"
     */
-   public R visit(BracketExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(BracketExpression n, A argu) 
+   {
+      return (R)n.f1.accept(this, argu);
    }
 }
