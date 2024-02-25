@@ -15,4 +15,20 @@ public class ExprReturn
         this.usedTemps = new HashMap<String, String>();
         this.printString = "";
     }
+
+    public void addPrintString(String printString)
+    {
+        this.printString += printString;
+    }
+
+    public void addUsedTemp(String tempName, String tempType)
+    {
+        this.usedTemps.put(tempName, tempType);
+    }
+
+    public void setNewReturnTemp(String newTemp, String newType)
+    {
+        this.returnTemp = newTemp;
+        this.returnType = newType;
+    }
 }
