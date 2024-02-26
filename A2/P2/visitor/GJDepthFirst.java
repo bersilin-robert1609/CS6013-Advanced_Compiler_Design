@@ -83,7 +83,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       return newTemp;
    }
 
-   boolean debugVar = true;
+   boolean debugVar = false;
 
    void debug(String s)
    {
@@ -126,7 +126,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          }
       }
 
-      assert(true); // Code should never reach here
+      assert(false); // Code should never reach here
       return null;
    }
 
@@ -148,7 +148,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          }
       }
 
-      assert(true); // Code should never reach here
+      assert(false); // Code should never reach here
       return null;
    }
 
