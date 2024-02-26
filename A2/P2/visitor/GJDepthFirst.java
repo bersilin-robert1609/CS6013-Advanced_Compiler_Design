@@ -273,11 +273,11 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
             varDecls += varAttrNode.type + " " + varName + ";\n";
          }
 
-         Out(s1 + "\n{\n" + varDecls);
+         Out(s1 + "\n{\n" + varDecls + "\n");
 
          n.f4.accept(this, (A)arguClass);
 
-         Out("}\n");
+         Out("\n}\n");
       }
       return null;
    }
@@ -323,11 +323,11 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
             varDecls += varAttrNode.type + " " + varName + ";\n";
          }
 
-         Out(s1 + "\n{\n" + varDecls);
+         Out(s1 + "\n{\n" + varDecls + "\n");
 
          n.f6.accept(this, (A)arguClass);
 
-         Out("}\n");
+         Out("\n}\n");
       }
       return null;
    }
@@ -390,6 +390,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       }
       else
       {
+         /* Printing Paramlist in the same order (ensured by LinkedHashMap) */
          String paramList = "";
          for(String paramName : symbolTable.get(arguClass.currClass).methodMap.get(methodName).paramMap.keySet())
          {
@@ -399,6 +400,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
 
          // Removes the comma and space at the end of the string
          if(paramList.length() > 0) paramList = paramList.substring(0, paramList.length() - 2);
+         /* ParamList Printing ends */
          
          HashMap<String, String> usedTemps = new HashMap<String, String>();
          String stmtString = "";
@@ -412,22 +414,21 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          
          ExprReturn exprReturn = (ExprReturn)n.f10.accept(this, (A)arguClass);
          
+         /* Printing all variable declarations */
+
          String varDecls = "";
          for(String varName: symbolTable.get(arguClass.currClass).methodMap.get(methodName).methodVarMap.keySet())
          {
             VarAttrNode varAttrNode = symbolTable.get(arguClass.currClass).methodMap.get(methodName).methodVarMap.get(varName);
             varDecls += varAttrNode.type + " " + varName + ";\n";
          }
-         
          for(String varName : usedTemps.keySet())
-         {
             varDecls += usedTemps.get(varName) + " " + varName + ";\n";
-         }
          
          for(String varName : exprReturn.usedTemps.keySet())
-         {
             varDecls += exprReturn.usedTemps.get(varName) + " " + varName + ";\n";
-         }
+
+         /* Variable declaration printing ends */
 
          stmtString += exprReturn.printString + "\n";
 
