@@ -31,4 +31,9 @@ public class ExprReturn
         this.returnTemp = newTemp;
         this.returnType = newType;
     }
+
+    public void addUsedTempMultiple(HashMap<String, String> usedTemps)
+    {
+        this.usedTemps.putAll(usedTemps);
+    }
 }
