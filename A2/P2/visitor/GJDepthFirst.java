@@ -114,14 +114,15 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       }
       else
       {
-         while(symbolTable.get(currClass).parent != null)
+         String className = currClass;
+         while(symbolTable.get(className).parent != null)
          {
-            String parentClass = symbolTable.get(currClass).parent;
+            String parentClass = symbolTable.get(className).parent;
             if(symbolTable.get(parentClass).varMap.containsKey(identifier))
             {
                return symbolTable.get(parentClass).varMap.get(identifier).type;
             }
-            currClass = symbolTable.get(parentClass).parent;
+            className = parentClass;
          }
       }
 
@@ -980,20 +981,35 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       else
       {
          exprReturn = new ExprReturn(null, null);
+         String newTemp = getNextTemp();
+
          if(n.f0.which == 0)
-            exprReturn.setNewReturnTemp((String)n.f0.accept(this, argu), "int");
-
+         {  
+            exprReturn.addUsedTemp(newTemp, "int");
+            exprReturn.addPrintString(newTemp + " = " + (String)n.f0.accept(this, argu) + ";\n");
+            exprReturn.setNewReturnTemp(newTemp, "int");
+         }
          else if(n.f0.which == 1 || n.f0.which == 2)
-            exprReturn.setNewReturnTemp((String)n.f0.accept(this, argu), "boolean");
-
+         {
+            exprReturn.addUsedTemp(newTemp, "boolean");
+            exprReturn.addPrintString(newTemp + " = " + (String)n.f0.accept(this, argu) + ";\n");
+            exprReturn.setNewReturnTemp(newTemp, "boolean");
+         }
          else if(n.f0.which == 3)
          {
             String identifier = (String)n.f0.accept(this, argu);
             String type = getType(identifier, (ArguClass)argu);
-            exprReturn.setNewReturnTemp(identifier, type);
+            exprReturn.addUsedTemp(newTemp, type);
+            exprReturn.addPrintString(newTemp + " = " + identifier + ";\n");
+            exprReturn.setNewReturnTemp(newTemp, type);
          }
          else if(n.f0.which == 4)
-            exprReturn.setNewReturnTemp((String)n.f0.accept(this, argu), ((ArguClass)argu).currClass);
+         {
+            String className = ((ArguClass)argu).currClass;
+            exprReturn.addUsedTemp(newTemp, className);
+            exprReturn.addPrintString(newTemp + " = this;\n");
+            exprReturn.setNewReturnTemp(newTemp, className);
+         }
       }
 
       return (R)exprReturn;

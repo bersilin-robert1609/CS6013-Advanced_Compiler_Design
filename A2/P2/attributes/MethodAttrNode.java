@@ -7,7 +7,7 @@ public class MethodAttrNode
     public String className;
     public int methodVarCount;
     public int paramCount;
-    public HashMap<String, ParamAttrNode> paramMap;
+    public LinkedHashMap<String, ParamAttrNode> paramMap;
     public HashMap<String, VarAttrNode> methodVarMap;
     public String returnType;
 
@@ -17,7 +17,7 @@ public class MethodAttrNode
        this.className = className;
        this.returnType = returnType;
 
-       this.paramMap = new HashMap<String, ParamAttrNode>();
+       this.paramMap = new LinkedHashMap<String, ParamAttrNode>();
        this.methodVarMap = new HashMap<String, VarAttrNode>();
 
        this.methodVarCount = 0;
