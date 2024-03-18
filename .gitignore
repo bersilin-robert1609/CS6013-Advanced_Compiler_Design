@@ -1,4 +1,4 @@
 *.class
 *.zip
-output/
+my-test/
 debug.out
