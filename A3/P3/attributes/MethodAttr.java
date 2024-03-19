@@ -2,7 +2,7 @@ package attributes;
 
 import java.util.HashMap;
 
-public class MethodAttr<R, A>
+public class MethodAttr
 {
     public String name;
     public String returnType;
@@ -12,7 +12,7 @@ public class MethodAttr<R, A>
     public int localVarCount;
     public String startLabel;
 
-    public HashMap<String, CFGNode<R, A>> cfgNodes;
+    public HashMap<String, CFGNode> cfgNodes;
     int labelCount;
 
     public MethodAttr(String name, String returnType)
@@ -25,6 +25,7 @@ public class MethodAttr<R, A>
         this.localVarCount = 0;
         this.startLabel = null;
         this.labelCount = 0;
+        this.cfgNodes = new HashMap<String, CFGNode>();
     }
 
     public void addParam(String name, String type)

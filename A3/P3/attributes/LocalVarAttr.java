@@ -11,4 +11,12 @@ public class LocalVarAttr extends VarAttr
         this.constPropType = LatticePoint.TOP;
         this.constValue = null;
     }
+
+    public LocalVarAttr(LocalVarAttr attr)
+    {
+        this.name = attr.name;
+        this.type = attr.type;
+        this.constPropType = attr.constPropType;
+        this.constValue = attr.constValue;
+    }
 }

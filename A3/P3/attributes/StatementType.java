@@ -8,5 +8,6 @@ public enum StatementType
     IF_ELSE,
     WHILE,
     FOR,
-    PRINT
+    PRINT,
+    NOP
 }
