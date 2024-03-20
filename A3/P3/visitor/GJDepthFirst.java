@@ -105,6 +105,29 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
       }
    }
 
+   VarAttr getType(String varName, String className, String methodName)
+   {
+      ClassAttr classAttr = symbolTable.get(className);
+      MethodAttr methodAttr = classAttr.methods.get(methodName);
+
+      if(methodAttr.localVars.containsKey(varName)) return methodAttr.localVars.get(varName);
+      else if(methodAttr.params.containsKey(varName)) return methodAttr.params.get(varName);
+      else if(classAttr.classVars.containsKey(varName)) return classAttr.classVars.get(varName);
+      else
+      {
+         String parentName = classAttr.parent;
+         while(parentName != null)
+         {
+            classAttr = symbolTable.get(parentName);
+            if(classAttr.classVars.containsKey(varName)) return classAttr.classVars.get(varName);
+            parentName = classAttr.parent;
+         }
+      }
+
+      assert(false); // Should never reach here
+      return null;
+   }
+
    //
    // User-generated visitor methods below
    //
@@ -154,14 +177,15 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
    public R visit(MainClass n, A argu) 
    {
       String className = n.f1.f0.toString();
-      String methodName = "main";
+      String methodName = n.f6.toString();
+      String returnType = n.f5.toString();
 
       if(visit == 0)
       {
          ClassAttr classAttr = new ClassAttr(className, null);
          symbolTable.put(className, classAttr);
 
-         MethodAttr methodAttr = new MethodAttr(methodName, "void");
+         MethodAttr methodAttr = new MethodAttr(methodName, returnType);
          classAttr.methods.put(methodName, methodAttr);
 
          currClass = className;
@@ -192,20 +216,19 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
          currClass = className;
          currMethod = methodName;
 
-         ClassAttr classAttr = symbolTable.get(currClass);
-         MethodAttr methodAttr = classAttr.methods.get(currMethod);
+         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
 
          if(methodAttr.startLabel == null) return null;
 
          String start = methodAttr.startLabel;
          CFGNode startNode = methodAttr.cfgNodes.get(start);
 
-         for(LocalVarAttr localVarAttr : methodAttr.localVars.values())
+         for(VarAttr localVarAttr : methodAttr.localVars.values())
          {
-            startNode.in.put(localVarAttr.name, new LocalVarAttr(localVarAttr));
+            startNode.in.put(localVarAttr.name, new VarAttr(localVarAttr));
          }
 
-         startNode.node.accept(this, null);
+         startNode.node.accept(this, (A)start);
       }
       
       return null;
@@ -243,6 +266,13 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
          n.f3.accept(this, null);
          n.f4.accept(this, null);
       }
+      else if(visit == 1)
+      {
+         currClass = className;
+         currMethod = null;
+
+         n.f4.accept(this, null);
+      }
 
       return null;
    }
@@ -273,6 +303,13 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
          n.f5.accept(this, null);
          n.f6.accept(this, null);
       }
+      else if(visit == 1)
+      {
+         currClass = className;
+         currMethod = null;
+
+         n.f6.accept(this, null);
+      }
 
       return null;
    }
@@ -287,7 +324,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
       assert(visit == 0 && currClass != null);
 
       String type = (String)n.f0.accept(this, argu);
-      String name = (String)n.f1.accept(this, argu);
+      String name = n.f1.f0.toString();
 
       if(currMethod == null) symbolTable.get(currClass).addClassVar(name, type);
       else symbolTable.get(currClass).methods.get(currMethod).addLocalVar(name, type);
@@ -343,6 +380,24 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
             oldReturn = stmtReturn;
          }
       }
+      else if(visit == 1)
+      {
+         currMethod = methodName;
+
+         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
+
+         if(methodAttr.startLabel == null) return null;
+
+         String start = methodAttr.startLabel;
+         CFGNode startNode = methodAttr.cfgNodes.get(start);
+
+         for(VarAttr localVarAttr : methodAttr.localVars.values())
+         {
+            startNode.in.put(localVarAttr.name, new VarAttr(localVarAttr));
+         }
+
+         startNode.node.accept(this, (A)start);
+      }
 
       return null;
    }
@@ -367,7 +422,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
       assert(visit == 0 && currClass != null && currMethod != null);
 
       String type = (String)n.f0.accept(this, argu);
-      String name = (String)n.f1.accept(this, argu);
+      String name = n.f1.f0.toString();
 
       symbolTable.get(currClass).methods.get(currMethod).addParam(name, type);
       return null;
@@ -432,7 +487,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
    public R visit(Statement n, A argu) 
    {
       if(visit == 0) return n.f0.accept(this, argu);
-      
+
       return null;
    }
 
@@ -487,6 +542,41 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
 
          return (R)new StmtReturn(label, label);
       }
+      else if(visit == 1)
+      {
+         String label = (String)argu;
+         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
+         CFGNode cfgNode = methodAttr.cfgNodes.get(label);
+
+         for(VarAttr localVarAttr : cfgNode.in.values())
+         {
+            cfgNode.out.put(localVarAttr.name, new VarAttr(localVarAttr));
+         }
+
+         // Special Processing
+         String varName = n.f0.f0.tokenImage;
+         VarAttr type = getType(varName, currClass, currMethod);
+
+         if(type.varType == VarType.LOCALVAR && (type.dtype == "int" || type.dtype == "boolean"))
+         {
+            ExprReturn exprReturn = (ExprReturn)n.f2.accept(this, argu);
+            if(exprReturn.isConst)
+            {
+               cfgNode.out.get(varName).constPropType = LatticePoint.CONSTANT;
+               cfgNode.out.get(varName).value = exprReturn.value;
+            }
+            else cfgNode.out.get(varName).constPropType = LatticePoint.BOTTOM;
+         }
+         // End Special Processing
+
+         String next = cfgNode.posNext;
+         CFGNode nextNode = methodAttr.cfgNodes.get(next);
+         for(VarAttr localVarAttr : cfgNode.out.values())
+         {
+            nextNode.in.put(localVarAttr.name, new VarAttr(localVarAttr));
+         }
+         nextNode.node.accept(this, (A)next);
+      }
 
       return null;
    }
@@ -512,6 +602,24 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
 
          return (R)new StmtReturn(label, label);
       }
+      else if(visit == 1)
+      {
+         String label = (String)argu;
+         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
+         CFGNode cfgNode = methodAttr.cfgNodes.get(label);
+
+         String next = cfgNode.posNext;
+         CFGNode nextNode = methodAttr.cfgNodes.get(next);
+         for(VarAttr localVarAttr : cfgNode.in.values())
+         {
+            cfgNode.out.put(localVarAttr.name, new VarAttr(localVarAttr));
+            nextNode.in.put(localVarAttr.name, new VarAttr(localVarAttr));
+         }
+
+         // No special processing required for array assignment
+
+         nextNode.node.accept(this, (A)next);
+      }
 
       return null;
    }
@@ -535,6 +643,24 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
          methodAttr.cfgNodes.put(label, cfgNode);
 
          return (R)new StmtReturn(label, label);
+      }
+      else if(visit == 1)
+      {
+         String label = (String)argu;
+         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
+         CFGNode cfgNode = methodAttr.cfgNodes.get(label);
+
+         String next = cfgNode.posNext;
+         CFGNode nextNode = methodAttr.cfgNodes.get(next);
+         for(VarAttr localVarAttr : cfgNode.in.values())
+         {
+            cfgNode.out.put(localVarAttr.name, new VarAttr(localVarAttr));
+            nextNode.in.put(localVarAttr.name, new VarAttr(localVarAttr));
+         }
+
+         // No special processing required for field assignment
+
+         nextNode.node.accept(this, (A)next);
       }
 
       return null;

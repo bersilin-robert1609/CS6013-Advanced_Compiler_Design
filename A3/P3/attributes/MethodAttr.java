@@ -6,8 +6,8 @@ public class MethodAttr
 {
     public String name;
     public String returnType;
-    public HashMap<String, ParamAttr> params;
-    public HashMap<String, LocalVarAttr> localVars;
+    public HashMap<String, VarAttr> params;
+    public HashMap<String, VarAttr> localVars;
     public int paramCount;
     public int localVarCount;
     public String startLabel;
@@ -19,8 +19,8 @@ public class MethodAttr
     {
         this.name = name;
         this.returnType = returnType;
-        this.params = new HashMap<String, ParamAttr>();
-        this.localVars = new HashMap<String, LocalVarAttr>();
+        this.params = new HashMap<String, VarAttr>();
+        this.localVars = new HashMap<String, VarAttr>();
         this.paramCount = 0;
         this.localVarCount = 0;
         this.startLabel = null;
@@ -31,14 +31,14 @@ public class MethodAttr
     public void addParam(String name, String type)
     {
         this.paramCount++;
-        ParamAttr param = new ParamAttr(name, type);
+        VarAttr param = new VarAttr(name, type, LatticePoint.BOTTOM, VarType.PARAM);
         this.params.put(name, param);
     }
 
     public void addLocalVar(String name, String type)
     {
         this.localVarCount++;
-        LocalVarAttr localVar = new LocalVarAttr(name, type);
+        VarAttr localVar = new VarAttr(name, type, LatticePoint.TOP, VarType.LOCALVAR);
         this.localVars.put(name, localVar);
     }
 

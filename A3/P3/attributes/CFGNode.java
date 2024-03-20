@@ -11,8 +11,8 @@ public class CFGNode
     public String posNext; // Label for the Node when the condition is true
     public String negNext; // Label for the Node when the condition is false
 
-    public HashMap<String, LocalVarAttr> in;
-    public HashMap<String, LocalVarAttr> out;
+    public HashMap<String, VarAttr> in;
+    public HashMap<String, VarAttr> out;
 
     public CFGNode(StatementType type, Node node, String label)
     {
@@ -22,7 +22,7 @@ public class CFGNode
         this.parent = null;
         this.posNext = null;
         this.negNext = null;
-        this.in = new HashMap<String, LocalVarAttr>();
-        this.out = new HashMap<String, LocalVarAttr>();
+        this.in = new HashMap<String, VarAttr>();
+        this.out = new HashMap<String, VarAttr>();
     }
 }
