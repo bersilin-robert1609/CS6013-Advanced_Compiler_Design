@@ -25,4 +25,35 @@ public class VarAttr
         this.varType = attr.varType;
         this.value = attr.value;
     }
+
+    public boolean isTop()
+    {
+        return this.constPropType == LatticePoint.TOP;
+    }
+
+    public boolean isBottom()
+    {
+        return this.constPropType == LatticePoint.BOTTOM;
+    }
+
+    public boolean isConstant()
+    {
+        return this.constPropType == LatticePoint.CONSTANT;
+    }
+
+    public void setConstant(String value)
+    {
+        this.constPropType = LatticePoint.CONSTANT;
+        this.value = value;
+    }
+
+    public void setTop()
+    {
+        this.constPropType = LatticePoint.TOP;
+    }
+
+    public void setBottom()
+    {
+        this.constPropType = LatticePoint.BOTTOM;
+    }
 }
