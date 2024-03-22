@@ -7,7 +7,8 @@ public enum StatementType
     FIELD_ASSIGN,
     IF_ELSE,
     WHILE,
-    FOR,
+    FORCOND,
     PRINT,
-    NOP
+    NOP,
+    FORINIT
 }

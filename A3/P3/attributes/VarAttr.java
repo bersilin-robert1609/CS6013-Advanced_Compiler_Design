@@ -56,4 +56,16 @@ public class VarAttr
     {
         this.constPropType = LatticePoint.BOTTOM;
     }
+
+    public boolean isSame(VarAttr attr)
+    {
+        // Check all fields
+        boolean check = true;
+        check = check && this.name.equals(attr.name);
+        check = check && this.dtype.equals(attr.dtype);
+        check = check && this.constPropType == attr.constPropType;
+        check = check && this.varType == attr.varType;
+        check = check && this.value.equals(attr.value);
+        return check;
+    }
 }

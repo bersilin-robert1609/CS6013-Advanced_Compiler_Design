@@ -79,32 +79,6 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
       if(DEBUG) System.out.println(s);
    }
 
-   void printAllCFGs()
-   {
-      for(Map.Entry<String, ClassAttr> entry : symbolTable.entrySet())
-      {
-         String className = entry.getKey();
-         ClassAttr classAttr = entry.getValue();
-
-         for(Map.Entry<String, MethodAttr> entry2 : classAttr.methods.entrySet())
-         {
-            String methodName = entry2.getKey();
-            MethodAttr methodAttr = entry2.getValue();
-
-            System.out.println("Class: " + className + " Method: " + methodName);
-            for(Map.Entry<String, CFGNode> entry3 : methodAttr.cfgNodes.entrySet())
-            {
-               String label = entry3.getKey();
-               CFGNode cfgNode = entry3.getValue();
-
-               System.out.println("Label: " + label + " Type: " + cfgNode.type);
-               System.out.println("Parent: " + cfgNode.parent + " PosNext: " + cfgNode.posNext + " NegNext: " + cfgNode.negNext);
-               System.out.println();
-            }
-         }
-      }
-   }
-
    VarAttr getType(String varName, String className, String methodName)
    {
       ClassAttr classAttr = symbolTable.get(className);
@@ -128,54 +102,39 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
       return null;
    }
 
-   void copyDataFlow(HashMap<String, VarAttr> in, HashMap<String, VarAttr> out)
+   void processNode(CFGNode cfgNode)
    {
-      // Copy in to out by creating new objects rather than copying references
-      out.clear();
-      for(VarAttr localVarAttr : in.values())
+      if(cfgNode == null) return;
+
+      if(cfgNode.type == StatementType.NOP)
       {
-         out.put(localVarAttr.name, new VarAttr(localVarAttr));
+         cfgNode.dataFlowMeet();
+         cfgNode.out = cfgNode.in;
+
+         processNode(cfgNode.posNext);
+         return;
       }
+      cfgNode.node.accept(this, (A)cfgNode);
+      return;
+   }
+   
+   void copyDataFlow(HashMap<String, VarAttr> src, HashMap<String, VarAttr> dest)
+   {
+      dest.clear();
+      for(VarAttr varAttr : src.values()) dest.put(varAttr.name, new VarAttr(varAttr));
    }
 
-   void dataFlowMeet(HashMap<String, VarAttr> in1, HashMap<String, VarAttr> in2, HashMap<String, VarAttr> out)
+   boolean checkCopyDF(HashMap<String, VarAttr> src, HashMap<String, VarAttr> dest)
    {
-      // Meet operation for data flow analysis
-      out.clear();
-      for(VarAttr localVarAttr1 : in1.values())
+      // Returns true if src and dest are different
+      boolean check = false; // assume same
+      for(VarAttr varAttr : src.values())
       {
-         String constValue = null;
-         int condCode = -1; // 0 - Top, 1 - Const, 2 - Bottom
-         VarAttr localVarAttr2 = in2.get(localVarAttr1.name);
-
-         if(localVarAttr1.isTop() && localVarAttr2.isTop()) condCode = 0;
-         else if(localVarAttr1.isTop() && localVarAttr2.isConstant())
-         {
-            condCode = 1;
-            constValue = localVarAttr2.value;
-         }
-         else if(localVarAttr1.isConstant() && localVarAttr2.isTop())
-         {
-            condCode = 1;
-            constValue = localVarAttr1.value;
-         }
-         else if(localVarAttr1.isConstant() && localVarAttr2.isConstant())
-         {
-            if(localVarAttr1.value.equals(localVarAttr2.value))
-            {
-               condCode = 1;
-               constValue = localVarAttr1.value;
-            }
-            else condCode = 2;
-         }
-         else if(localVarAttr1.isBottom() || localVarAttr2.isBottom()) condCode = 2;
-
-         out.put(localVarAttr1.name, new VarAttr(localVarAttr1));
-
-         if(condCode == 1) out.get(localVarAttr1.name).setConstant(constValue);
-         else if(condCode == 0) out.get(localVarAttr1.name).setTop();
-         else if(condCode == 2) out.get(localVarAttr1.name).setBottom();
+         VarAttr destVarAttr = dest.get(varAttr.name);
+         if(varAttr.isSame(destVarAttr) == false) check = true; // different
+         dest.put(varAttr.name, new VarAttr(varAttr));
       }
+      return check;
    }
 
    //
@@ -195,7 +154,6 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
 
       currClass = null;
       currMethod = null;
-      printAllCFGs();
 
       visit = 1;
       n.f0.accept(this, null);
@@ -248,15 +206,12 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
          {
             StmtReturn stmtReturn = (StmtReturn)e.nextElement().accept(this, null);
 
-            if(methodAttr.startLabel == null) methodAttr.startLabel = stmtReturn.beginLabel;
+            if(methodAttr.startNode == null) methodAttr.setStartNode(stmtReturn.beginNode);
 
             if(oldReturn != null)
             {
-               CFGNode currCfgNode = methodAttr.cfgNodes.get(stmtReturn.beginLabel);
-               currCfgNode.parent = oldReturn.endLabel;
-
-               CFGNode cfgNode = methodAttr.cfgNodes.get(oldReturn.endLabel);
-               cfgNode.posNext = stmtReturn.beginLabel;
+               stmtReturn.beginNode.setParent1(oldReturn.endNode);
+               oldReturn.endNode.setPosNext(stmtReturn.beginNode);
             }
             oldReturn = stmtReturn;
          }
@@ -266,16 +221,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
          currClass = className;
          currMethod = methodName;
 
-         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
-
-         if(methodAttr.startLabel == null) return null;
-
-         String start = methodAttr.startLabel;
-         CFGNode startNode = methodAttr.cfgNodes.get(start);
-
-         copyDataFlow(methodAttr.localVars, startNode.in);
-
-         startNode.node.accept(this, (A)start);
+         processNode(symbolTable.get(className).methods.get(methodName).startNode);
       }
       
       return null;
@@ -414,15 +360,13 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
          for(Enumeration<Node> e = n.f8.elements(); e.hasMoreElements();)
          {
             StmtReturn stmtReturn = (StmtReturn)e.nextElement().accept(this, null);
-            if(methodAttr.startLabel == null) methodAttr.startLabel = stmtReturn.beginLabel;
+            
+            if(methodAttr.startNode == null) methodAttr.setStartNode(stmtReturn.beginNode);
 
             if(oldReturn != null)
             {
-               CFGNode currCfgNode = methodAttr.cfgNodes.get(stmtReturn.beginLabel);
-               currCfgNode.parent = oldReturn.endLabel;
-
-               CFGNode cfgNode = methodAttr.cfgNodes.get(oldReturn.endLabel);
-               cfgNode.posNext = stmtReturn.beginLabel;
+               stmtReturn.beginNode.setParent1(oldReturn.endNode);
+               oldReturn.endNode.setPosNext(stmtReturn.beginNode);
             }
             oldReturn = stmtReturn;
          }
@@ -430,17 +374,8 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
       else if(visit == 1)
       {
          currMethod = methodName;
-
-         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
-
-         if(methodAttr.startLabel == null) return null;
-
-         String start = methodAttr.startLabel;
-         CFGNode startNode = methodAttr.cfgNodes.get(start);
-
-         copyDataFlow(methodAttr.localVars, startNode.in);
-
-         startNode.node.accept(this, (A)start);
+         
+         processNode(symbolTable.get(currClass).methods.get(currMethod).startNode);
       }
 
       return null;
@@ -544,8 +479,13 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
    {
       if(visit == 0)
       {
-         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
-
+         if(n.f1.size() == 0)
+         {
+            // Empty block
+            CFGNode cfgNode = new CFGNode(StatementType.NOP, null, currClass, currMethod, symbolTable);
+            return (R)new StmtReturn(cfgNode, cfgNode);
+         }
+         
          StmtReturn returnValue = null;
          StmtReturn oldReturn = null;
          for(Enumeration<Node> e = n.f1.elements(); e.hasMoreElements();)
@@ -554,15 +494,12 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
             if(returnValue == null) returnValue = stmtReturn;
             if(oldReturn != null)
             {
-               CFGNode currCfgNode = methodAttr.cfgNodes.get(stmtReturn.beginLabel);
-               currCfgNode.parent = oldReturn.endLabel;
-
-               CFGNode cfgNode = methodAttr.cfgNodes.get(oldReturn.endLabel);
-               cfgNode.posNext = stmtReturn.beginLabel;
+               stmtReturn.beginNode.setParent1(oldReturn.endNode);
+               oldReturn.endNode.setPosNext(stmtReturn.beginNode);
             }
             oldReturn = stmtReturn;
          }
-         returnValue.endLabel = oldReturn.endLabel;
+         returnValue.endNode = oldReturn.endNode;
          return (R)returnValue;
       }
       return null;
@@ -578,41 +515,28 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
    {
       if(visit == 0)
       {
-         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
-
-         String label = methodAttr.getNextLabel();
-         CFGNode cfgNode = new CFGNode(StatementType.ASSIGN, n, label);
-         methodAttr.cfgNodes.put(label, cfgNode);
-
-         return (R)new StmtReturn(label, label);
+         CFGNode cfgNode = new CFGNode(StatementType.ASSIGN, n, currClass, currMethod, symbolTable);
+         return (R)new StmtReturn(cfgNode, cfgNode);
       }
       else if(visit == 1)
-      {
-         String label = (String)argu;
-         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
-         CFGNode cfgNode = methodAttr.cfgNodes.get(label);
-
+      {         
+         CFGNode cfgNode = (CFGNode)argu;
+         cfgNode.dataFlowMeet();
          copyDataFlow(cfgNode.in, cfgNode.out);
 
          // Special Processing
          String varName = n.f0.f0.tokenImage;
          VarAttr type = getType(varName, currClass, currMethod);
 
-         if(type.varType == VarType.LOCALVAR && (type.dtype == "int" || type.dtype == "boolean"))
+         if(type.varType == VarType.LOCALVAR && (type.dtype == "int" || type.dtype =="boolean"))
          {
             ExprReturn exprReturn = (ExprReturn)n.f2.accept(this, argu);
 
             if(exprReturn.isConst) cfgNode.out.get(varName).setConstant(exprReturn.value);
             else cfgNode.out.get(varName).setBottom();
          }
-         // End Special Processing
 
-         String next = cfgNode.posNext;
-         CFGNode nextNode = methodAttr.cfgNodes.get(next);
-         
-         copyDataFlow(cfgNode.out, nextNode.in);
-
-         nextNode.node.accept(this, (A)next);
+         processNode(cfgNode.posNext);
       }
 
       return null;
@@ -631,30 +555,18 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
    {
       if(visit == 0)
       {
-         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
-
-         String label = methodAttr.getNextLabel();
-         CFGNode cfgNode = new CFGNode(StatementType.ARRAY_ASSIGN, n, label);
-         methodAttr.cfgNodes.put(label, cfgNode);
-
-         return (R)new StmtReturn(label, label);
+         CFGNode cfgNode = new CFGNode(StatementType.ARRAY_ASSIGN, n, currClass, currMethod, symbolTable);
+         return (R)new StmtReturn(cfgNode, cfgNode);
       }
       else if(visit == 1)
       {
-         String label = (String)argu;
-         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
-         CFGNode cfgNode = methodAttr.cfgNodes.get(label);
-
-         String next = cfgNode.posNext;
-         CFGNode nextNode = methodAttr.cfgNodes.get(next);
-         
+         CFGNode cfgNode = (CFGNode)argu;
+         cfgNode.dataFlowMeet();
          copyDataFlow(cfgNode.in, cfgNode.out);
 
          // No special processing required for array assignment
 
-         copyDataFlow(cfgNode.out, nextNode.in);
-
-         nextNode.node.accept(this, (A)next);
+         processNode(cfgNode.posNext);
       }
 
       return null;
@@ -672,30 +584,18 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
    {
       if(visit == 0)
       {
-         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
-
-         String label = methodAttr.getNextLabel();
-         CFGNode cfgNode = new CFGNode(StatementType.FIELD_ASSIGN, n, label);
-         methodAttr.cfgNodes.put(label, cfgNode);
-
-         return (R)new StmtReturn(label, label);
+         CFGNode cfgNode = new CFGNode(StatementType.FIELD_ASSIGN, n, currClass, currMethod, symbolTable);
+         return (R)new StmtReturn(cfgNode, cfgNode);
       }
       else if(visit == 1)
       {
-         String label = (String)argu;
-         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
-         CFGNode cfgNode = methodAttr.cfgNodes.get(label);
-
-         String next = cfgNode.posNext;
-         CFGNode nextNode = methodAttr.cfgNodes.get(next);
-         
+         CFGNode cfgNode = (CFGNode)argu;
+         cfgNode.dataFlowMeet();
          copyDataFlow(cfgNode.in, cfgNode.out);
 
          // No special processing required for field assignment
 
-         copyDataFlow(cfgNode.out, nextNode.in);
-
-         nextNode.node.accept(this, (A)next);
+         processNode(cfgNode.posNext);
       }
 
       return null;
@@ -714,92 +614,53 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
    {
       if(visit == 0)
       {
-         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
+         CFGNode cfgNode = new CFGNode(StatementType.IF_ELSE, n, currClass, currMethod, symbolTable);
+         CFGNode cfgNodeDummy = new CFGNode(StatementType.NOP, null, currClass, currMethod, symbolTable);
 
-         String label = methodAttr.getNextLabel();
-         CFGNode cfgNode = new CFGNode(StatementType.IF_ELSE, n, label);
-         methodAttr.cfgNodes.put(label, cfgNode);
+         StmtReturn stmtReturn1 = (StmtReturn)n.f4.accept(this, argu);
+         StmtReturn stmtReturn2 = (StmtReturn)n.f6.accept(this, argu);
 
-         String labelDummy = methodAttr.getNextLabel();
-         CFGNode cfgNodeDummy = new CFGNode(StatementType.NOP, null, labelDummy);
-         methodAttr.cfgNodes.put(labelDummy, cfgNodeDummy);
+         stmtReturn1.beginNode.setParents(cfgNode, null);
+         stmtReturn2.beginNode.setParents(cfgNode, null);
 
-         StmtReturn stmtReturnPos = (StmtReturn)n.f4.accept(this, argu);
-         StmtReturn stmtReturnNeg = (StmtReturn)n.f6.accept(this, argu);
+         // Stmt1.endNode and Stmt2.endNode will not have posNext it will return here
 
-         cfgNode.posNext = stmtReturnPos.beginLabel;
-         methodAttr.cfgNodes.get(stmtReturnPos.endLabel).posNext = labelDummy;
-         methodAttr.cfgNodes.get(stmtReturnPos.beginLabel).parent = label;
+         cfgNode.ifDummy = cfgNodeDummy;
 
-         cfgNode.negNext = stmtReturnNeg.beginLabel;
-         methodAttr.cfgNodes.get(stmtReturnNeg.endLabel).posNext = labelDummy;
-         methodAttr.cfgNodes.get(stmtReturnNeg.beginLabel).parent = label;
+         cfgNode.setNexts(stmtReturn1.beginNode, stmtReturn2.beginNode);
+         cfgNodeDummy.setParents(stmtReturn1.endNode, stmtReturn2.endNode);
 
-         return (R)new StmtReturn(label, labelDummy);
+         return (R)new StmtReturn(cfgNode, cfgNodeDummy);
       }
       else if(visit == 1)
       {
-         String label = (String)argu;
-         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
-         CFGNode cfgNode = methodAttr.cfgNodes.get(label);
-
+         CFGNode cfgNode = (CFGNode)argu;
+         cfgNode.dataFlowMeet();
          copyDataFlow(cfgNode.in, cfgNode.out);
          
          // Special Processing
          String condName = n.f2.f0.tokenImage;
          VarAttr type = getType(condName, currClass, currMethod);
 
-         String dummyNext = methodAttr.cfgNodes.get(cfgNode.posNext).posNext;
-         CFGNode dummyNextNode = methodAttr.cfgNodes.get(dummyNext);
-
          if(type.varType == VarType.LOCALVAR && cfgNode.in.get(condName).isConstant())
          {
             // Conditional constant propagation
             // Constant condition value - do only True or False branch
 
-            String next = null;
+            CFGNode next = null;
             if(cfgNode.in.get(condName).value.equals("true")) next = cfgNode.posNext;
             else next = cfgNode.negNext;
 
-            CFGNode nextNode = methodAttr.cfgNodes.get(next);
-
-            copyDataFlow(cfgNode.out, nextNode.in);
-            nextNode.node.accept(this, (A)next);
-
-            // Next node is NOP
-            
-            copyDataFlow(nextNode.out, dummyNextNode.in);
-            copyDataFlow(nextNode.out, dummyNextNode.out);
+            processNode(next);
          }
          else
          {
-            // Simple constant propagation
-            // Non-constant condition value - do both True and False branches
-
-            String posNext = cfgNode.posNext;
-            CFGNode posNextNode = methodAttr.cfgNodes.get(posNext);
-
-            copyDataFlow(cfgNode.out, posNextNode.in);
-            posNextNode.node.accept(this, (A)posNext);
-
-            String negNext = cfgNode.negNext;
-            CFGNode negNextNode = methodAttr.cfgNodes.get(negNext);
-
-            copyDataFlow(cfgNode.out, negNextNode.in);
-            negNextNode.node.accept(this, (A)negNext);
-
-            // Next node is NOP
-
-            dataFlowMeet(posNextNode.out, negNextNode.out, dummyNextNode.in);
-            copyDataFlow(dummyNextNode.in, dummyNextNode.out);
+            // Simple case - do both branches
+            
+            processNode(cfgNode.posNext);
+            processNode(cfgNode.negNext);
          }
-         // End Special Processing
-
-         String next = dummyNextNode.posNext;
-         CFGNode nextNode = methodAttr.cfgNodes.get(next);
-
-         copyDataFlow(dummyNextNode.out, nextNode.in);
-         nextNode.node.accept(this, (A)next);
+         processNode(cfgNode.ifDummy);
       }
 
       return null;
@@ -816,29 +677,51 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
    {
       if(visit == 0)
       {
-         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
-
-         String label = methodAttr.getNextLabel();
-         CFGNode cfgNode = new CFGNode(StatementType.WHILE, n, label);
-         methodAttr.cfgNodes.put(label, cfgNode);
-
-         String labelDummy = methodAttr.getNextLabel();
-         CFGNode cfgNodeDummy = new CFGNode(StatementType.NOP, null, labelDummy);
-         methodAttr.cfgNodes.put(labelDummy, cfgNodeDummy);
+         CFGNode cfgNode = new CFGNode(StatementType.WHILE, n, currClass, currMethod, symbolTable);
 
          StmtReturn stmtReturn = (StmtReturn)n.f4.accept(this, argu);
 
-         cfgNode.posNext = stmtReturn.beginLabel;
-         cfgNode.negNext = labelDummy;
+         stmtReturn.beginNode.setParents(cfgNode, null);
 
-         methodAttr.cfgNodes.get(stmtReturn.endLabel).posNext = label;
-         methodAttr.cfgNodes.get(stmtReturn.beginLabel).parent = label;
+         //Stmt.endNode will not have posNext it will return here
 
-         return (R)new StmtReturn(label, labelDummy);
+         cfgNode.setPosNext(stmtReturn.beginNode);
+         cfgNode.setParent2(stmtReturn.endNode);
+
+         return (R)new StmtReturn(cfgNode, cfgNode);
       }
       else if(visit == 1)
       {
-         
+         CFGNode cfgNode = (CFGNode)argu;
+         cfgNode.dataFlowMeet();
+         copyDataFlow(cfgNode.in, cfgNode.out);
+
+         // Special Processing
+         String condName = n.f2.f0.tokenImage;
+         VarAttr type = getType(condName, currClass, currMethod);
+
+         if(type.varType == VarType.LOCALVAR && cfgNode.in.get(condName).isConstant() && cfgNode.in.get(condName).value.equals("true"))
+         {
+            // Conditional constant propagation
+            
+            do 
+            {
+               processNode(cfgNode.posNext);
+               cfgNode.dataFlowMeet();
+            }
+            while(cfgNode.in.get(condName).isConstant() && cfgNode.in.get(condName).value.equals("true") && checkCopyDF(cfgNode.in, cfgNode.out));
+         }
+         else
+         {
+            do
+            {
+               processNode(cfgNode.posNext);
+               cfgNode.dataFlowMeet();
+            }
+            while(checkCopyDF(cfgNode.in, cfgNode.out));
+         }
+
+         processNode(cfgNode.negNext);
       }
 
       return null;
@@ -863,25 +746,68 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
    {
       if(visit == 0)
       {
-         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
+         CFGNode cfgNodeInit = new CFGNode(StatementType.FORINIT, null, currClass, currMethod, symbolTable);
+         CFGNode cfgNode = new CFGNode(StatementType.FORCOND, n, currClass, currMethod, symbolTable);
 
-         String label = methodAttr.getNextLabel();
-         CFGNode cfgNode = new CFGNode(StatementType.FOR, n, label);
-         methodAttr.cfgNodes.put(label, cfgNode);
+         StmtReturn stmtReturn = (StmtReturn)n.f4.accept(this, argu);
 
-         String labelDummy = methodAttr.getNextLabel();
-         CFGNode cfgNodeDummy = new CFGNode(StatementType.NOP, null, labelDummy);
-         methodAttr.cfgNodes.put(labelDummy, cfgNodeDummy);
+         stmtReturn.beginNode.setParents(cfgNode, null);
 
-         StmtReturn stmtReturn = (StmtReturn)n.f12.accept(this, argu);
+         // Stmt.endNode will not have posNext it will return here
 
-         cfgNode.posNext = stmtReturn.beginLabel;
-         cfgNode.negNext = labelDummy;
+         cfgNode.setParents(cfgNodeInit, stmtReturn.endNode);
+         cfgNodeInit.setNexts(cfgNode, null);
+         
+         return (R)new StmtReturn(cfgNodeInit, cfgNode);
+      }
+      else if(visit == 1)
+      {
+         CFGNode cfgNodeInit = (CFGNode)argu;
+         CFGNode cfgNode = cfgNodeInit.posNext;
 
-         methodAttr.cfgNodes.get(stmtReturn.endLabel).posNext = label;
-         methodAttr.cfgNodes.get(stmtReturn.beginLabel).parent = label;
+         cfgNodeInit.dataFlowMeet();
+         copyDataFlow(cfgNodeInit.in, cfgNodeInit.out);
 
-         return (R)new StmtReturn(label, labelDummy);
+         // Special Processing
+         String varName = n.f2.f0.tokenImage;
+         VarAttr type = getType(varName, currClass, currMethod);
+
+         if(type.varType == VarType.LOCALVAR)
+         {
+            ExprReturn exprReturn = (ExprReturn)n.f4.accept(this, (A)cfgNodeInit);
+
+            if(exprReturn.isConst) cfgNodeInit.out.get(varName).setConstant(exprReturn.value);
+            else cfgNodeInit.out.get(varName).setBottom();
+         }
+
+         cfgNode.dataFlowMeet();
+         copyDataFlow(cfgNode.in, cfgNode.out);
+
+         // Special Processing
+
+         ExprReturn exprReturn = (ExprReturn)n.f6.accept(this, (A)cfgNode);
+
+         if(exprReturn.isConst && exprReturn.value.equals("true"))
+         {
+            // Conditional constant propagation
+
+            do
+            {
+               processNode(cfgNode.posNext);
+               cfgNode.dataFlowMeet();
+
+            }
+            while(checkCopyDF(cfgNode.in, cfgNode.out));
+         }
+         else
+         {
+            do
+            {
+               processNode(cfgNode.posNext);
+               cfgNode.dataFlowMeet();
+            }
+            while(checkCopyDF(cfgNode.in, cfgNode.out));
+         }
       }
 
       return null;
@@ -898,13 +824,18 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
    {
       if(visit == 0)
       {
-         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
+         CFGNode cfgNode = new CFGNode(StatementType.PRINT, n, currClass, currMethod, symbolTable);
+         return (R)new StmtReturn(cfgNode, cfgNode);
+      }
+      else if(visit == 1)
+      {
+         CFGNode cfgNode = (CFGNode)argu;
+         cfgNode.dataFlowMeet();
+         copyDataFlow(cfgNode.in, cfgNode.out);
 
-         String label = methodAttr.getNextLabel();
-         CFGNode cfgNode = new CFGNode(StatementType.PRINT, n, label);
-         methodAttr.cfgNodes.put(label, cfgNode);
+         // No special processing required for print statement
 
-         return (R)new StmtReturn(label, label);
+         processNode(cfgNode.posNext);
       }
 
       return null;

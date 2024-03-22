@@ -10,9 +10,8 @@ public class MethodAttr
     public HashMap<String, VarAttr> localVars;
     public int paramCount;
     public int localVarCount;
-    public String startLabel;
+    public CFGNode startNode;
 
-    public HashMap<String, CFGNode> cfgNodes;
     int labelCount;
 
     public MethodAttr(String name, String returnType)
@@ -23,9 +22,8 @@ public class MethodAttr
         this.localVars = new HashMap<String, VarAttr>();
         this.paramCount = 0;
         this.localVarCount = 0;
-        this.startLabel = null;
+        this.startNode = null;
         this.labelCount = 0;
-        this.cfgNodes = new HashMap<String, CFGNode>();
     }
 
     public void addParam(String name, String type)
@@ -45,5 +43,10 @@ public class MethodAttr
     public String getNextLabel()
     {
         return "L" + labelCount++;
+    }
+
+    public void setStartNode(CFGNode startNode)
+    {
+        this.startNode = startNode;
     }
 }

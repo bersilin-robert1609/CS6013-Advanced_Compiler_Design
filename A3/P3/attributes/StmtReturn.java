@@ -2,12 +2,12 @@ package attributes;
 
 public class StmtReturn 
 {
-    public String beginLabel;
-    public String endLabel;
+    public CFGNode beginNode;
+    public CFGNode endNode;
 
-    public StmtReturn(String beginLabel, String endLabel)
+    public StmtReturn(CFGNode beginNode, CFGNode endNode)
     {
-        this.beginLabel = beginLabel;
-        this.endLabel = endLabel;
+        this.beginNode = beginNode;
+        this.endNode = endNode;
     }
 }
