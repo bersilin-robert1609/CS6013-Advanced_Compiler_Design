@@ -1,12 +1,13 @@
 package attributes;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 
 public class MethodAttr
 {
     public String name;
     public String returnType;
-    public HashMap<String, VarAttr> params;
+    public LinkedHashMap<String, VarAttr> params;
     public HashMap<String, VarAttr> localVars;
     public int paramCount;
     public int localVarCount;
@@ -21,7 +22,7 @@ public class MethodAttr
     {
         this.name = name;
         this.returnType = returnType;
-        this.params = new HashMap<String, VarAttr>();
+        this.params = new LinkedHashMap<String, VarAttr>();
         this.localVars = new HashMap<String, VarAttr>();
         this.paramCount = 0;
         this.localVarCount = 0;

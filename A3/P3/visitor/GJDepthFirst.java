@@ -889,8 +889,19 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
                processNode(cfgNode.posNext);
                cfgNode.dataFlowMeet();
 
-               if(checkCopyDF(cfgNode.in, cfgNode.out) == false) break;
+               if(checkCopyDF(cfgNode.in, cfgNode.out) == false) break; // false = same
             }
+
+            if(cfgNode.in.get(condName).isConstant() == false)
+            {
+               do
+               {
+                  processNode(cfgNode.posNext);
+                  cfgNode.dataFlowMeet();
+               }
+               while(checkCopyDF(cfgNode.in, cfgNode.out)); // true = different
+            }
+         
             copyDataFlow(cfgNode.in, cfgNode.out);
          }
          else
@@ -915,10 +926,13 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
 
          if(condType.varType == VarType.LOCALVAR && cfgNode.in.get(condName).isConstant()) condName = cfgNode.in.get(condName).value;
 
-         out("while(" + condName + ")");
-         out("{");
-         processNode(cfgNode.posNext);
-         out("}");
+         if(!condName.equals("false")) // if not false
+         {
+            out("while(" + condName + ")");
+            out("{");
+            processNode(cfgNode.posNext);
+            out("}");
+         }
 
          processNode(cfgNode.negNext);
       }
@@ -1120,16 +1134,16 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
       boolean constType = false;
       if(isLocalConst(var1, cfgNode) && isLocalConst(var2, cfgNode))
       {
-         value = (Integer.parseInt(cfgNode.in.get(var1).value) & Integer.parseInt(cfgNode.in.get(var2).value)) + "";
+         value = (Boolean.parseBoolean(cfgNode.in.get(var1).value) & Boolean.parseBoolean(cfgNode.in.get(var2).value)) + "";
          constType = true;
       }
       else if(isLocalConst(var1, cfgNode))
       {
-         value = (Integer.parseInt(cfgNode.in.get(var1).value)) + " & " + var2;
+         value = (Boolean.parseBoolean(cfgNode.in.get(var1).value)) + " & " + var2;
       }
       else if(isLocalConst(var2, cfgNode))
       {
-         value = var1 + " & " + (Integer.parseInt(cfgNode.in.get(var2).value)) + "";
+         value = var1 + " & " + (Boolean.parseBoolean(cfgNode.in.get(var2).value)) + "";
       }
       else value = var1 + " & " + var2;
 
@@ -1318,14 +1332,16 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
 
       ArrayList<String> argList = new ArrayList<String>();
       n.f4.accept(this, (A)argList);
+      String argListString = "";
 
       for(int i = 0; i < argList.size(); i++)
       {
          String var = argList.get(i);
          if(isLocalConst(var, cfgNode)) var = cfgNode.in.get(var).value;
+         argListString += var + ", ";
       }
+      if(argListString.length() > 0) argListString = argListString.substring(0, argListString.length() - 2);
 
-      String argListString = String.join(", ", argList);
       return (R)new ExprReturn(false, exprReturn.value + "." + id + "(" + argListString + ")");
    }
 
@@ -1417,7 +1433,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
     */
    public R visit(ThisExpression n, A argu) 
    {
-      return (R)n.f0.tokenImage;
+      return (R)new ExprReturn(false, "this");
    }
 
    /**

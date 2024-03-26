@@ -50,11 +50,13 @@ public class VarAttr
     public void setTop()
     {
         this.constPropType = LatticePoint.TOP;
+        this.value = null;
     }
 
     public void setBottom()
     {
         this.constPropType = LatticePoint.BOTTOM;
+        this.value = null;
     }
 
     public boolean isSame(VarAttr attr)
@@ -63,9 +65,10 @@ public class VarAttr
         boolean check = true;
         check = check && this.name.equals(attr.name);
         check = check && this.dtype.equals(attr.dtype);
-        check = check && this.constPropType == attr.constPropType;
         check = check && this.varType == attr.varType;
-        check = check && (this.value == attr.value);
+
+        check = check && this.constPropType == attr.constPropType;
+        check = check && (this.value == null ? attr.value == null : this.value.equals(attr.value));
         return check;
     }
 }
