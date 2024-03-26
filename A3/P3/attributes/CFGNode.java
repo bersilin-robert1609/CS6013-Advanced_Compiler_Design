@@ -37,6 +37,8 @@ public class CFGNode
             this.in.put(varAttr.name, new VarAttr(varAttr));
             this.out.put(varAttr.name, new VarAttr(varAttr));
         }
+
+        symbolTable.get(currClass).methods.get(currMethod).labelToNode.put(this.label, this);
     }
 
     public void setParent1(CFGNode parent1) 
@@ -73,7 +75,7 @@ public class CFGNode
 
     public void dataFlowMeet()
     {
-        assert(this.parent1 != null); // Parent1 should always be present
+        if(this.parent1 == null) return;
 
         // Meet operator from parent1 and parent2
         this.in.clear();
@@ -111,7 +113,8 @@ public class CFGNode
             }
             else if(var1.isBottom() || var2.isBottom()) condCode = 2;
 
-            VarAttr var = this.in.put(var1.name, new VarAttr(var1));
+            this.in.put(var1.name, new VarAttr(var1));
+            VarAttr var = this.in.get(var1.name);
 
             if(condCode == 0) var.setTop();
             else if(condCode == 1) var.setConstant(constValue);

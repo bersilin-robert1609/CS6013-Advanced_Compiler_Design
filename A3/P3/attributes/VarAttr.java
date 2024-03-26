@@ -65,7 +65,7 @@ public class VarAttr
         check = check && this.dtype.equals(attr.dtype);
         check = check && this.constPropType == attr.constPropType;
         check = check && this.varType == attr.varType;
-        check = check && this.value.equals(attr.value);
+        check = check && (this.value == attr.value);
         return check;
     }
 }

@@ -124,9 +124,12 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
       for(VarAttr varAttr : src.values()) dest.put(varAttr.name, new VarAttr(varAttr));
    }
 
+   /**
+    * Returns True if the src and dest sets are different
+    * Copies the src set to dest set
+    */
    boolean checkCopyDF(HashMap<String, VarAttr> src, HashMap<String, VarAttr> dest)
    {
-      // Returns true if src and dest are different
       boolean check = false; // assume same
       for(VarAttr varAttr : src.values())
       {
@@ -135,6 +138,17 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
          dest.put(varAttr.name, new VarAttr(varAttr));
       }
       return check;
+   }
+
+   void out(String s)
+   {
+      System.out.println(s);
+   }
+
+   boolean isLocalConst(String variable, CFGNode cfgNode)
+   {
+      VarAttr varAttr = getType(variable, currClass, currMethod);
+      return (varAttr.varType == VarType.LOCALVAR && cfgNode.in.get(variable).isConstant());
    }
 
    //
@@ -156,6 +170,13 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
       currMethod = null;
 
       visit = 1;
+      n.f0.accept(this, null);
+      n.f1.accept(this, null);
+
+      currClass = null;
+      currMethod = null;
+
+      visit = 2;
       n.f0.accept(this, null);
       n.f1.accept(this, null);
 
@@ -223,6 +244,26 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
 
          processNode(symbolTable.get(className).methods.get(methodName).startNode);
       }
+      else 
+      {
+         // Printing Pass
+         currClass = className;
+         currMethod = methodName;
+         
+         String output = "class " + className + "{\n" + "public static void main(String[] " + n.f11.f0.toString() + ")\n{\n";
+         String varDecl = "";
+         for(VarAttr methodVarAttr : symbolTable.get(className).methods.get(methodName).localVars.values())
+         {
+            varDecl += methodVarAttr.dtype + " " + methodVarAttr.name + ";\n";
+         }
+         
+         out(output);
+         out(varDecl);
+         
+         processNode(symbolTable.get(className).methods.get(methodName).startNode);
+
+         out("}\n}");
+      }
       
       return null;
    }
@@ -266,6 +307,26 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
 
          n.f4.accept(this, null);
       }
+      else
+      {
+         // Printing Pass
+         currClass = className;
+         currMethod = null;
+
+         String output = "class " + className + "{\n";
+         String varDecl = "";
+         for(VarAttr classVarAttr : symbolTable.get(className).classVars.values())
+         {
+            varDecl += classVarAttr.dtype + " " + classVarAttr.name + ";\n";
+         }
+         
+         out(output);
+         out(varDecl);
+         
+         n.f4.accept(this, null);
+
+         out("}");
+      }
 
       return null;
    }
@@ -302,6 +363,26 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
          currMethod = null;
 
          n.f6.accept(this, null);
+      }
+      else
+      {
+         // Printing Pass
+         currClass = className;
+         currMethod = null;
+
+         String output = "class " + className + " extends " + parentName + "{\n";
+         String varDecl = "";
+         for(VarAttr classVarAttr : symbolTable.get(className).classVars.values())
+         {
+            varDecl += classVarAttr.dtype + " " + classVarAttr.name + ";\n";
+         }
+         
+         out(output);
+         out(varDecl);
+         
+         n.f6.accept(this, null);
+
+         out("}");
       }
 
       return null;
@@ -370,12 +451,50 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
             }
             oldReturn = stmtReturn;
          }
+         if(oldReturn != null) methodAttr.endNode = oldReturn.endNode;
       }
       else if(visit == 1)
       {
          currMethod = methodName;
          
          processNode(symbolTable.get(currClass).methods.get(currMethod).startNode);
+      }
+      else 
+      {
+         // Printing Pass
+         currMethod = methodName;
+
+         String output = "public " + returnType + " " + methodName + "(";
+         String paramList = "";
+         for(VarAttr param : symbolTable.get(currClass).methods.get(currMethod).params.values())
+         {
+            paramList += param.dtype + " " + param.name + ", ";
+         }
+         if(paramList.length() > 0) paramList = paramList.substring(0, paramList.length() - 2);
+         output += paramList + ")\n{\n";
+
+         String varDecl = "";
+         for(VarAttr localVar : symbolTable.get(currClass).methods.get(currMethod).localVars.values())
+         {
+            varDecl += localVar.dtype + " " + localVar.name + ";\n";
+         }
+
+         out(output);
+         out(varDecl);
+
+         processNode(symbolTable.get(currClass).methods.get(currMethod).startNode);
+
+         MethodAttr methodAttr = symbolTable.get(currClass).methods.get(currMethod);
+
+         String returnValue = n.f10.f0.toString();
+         if(methodAttr.endNode != null)
+         {
+            VarAttr returnVar = getType(returnValue, currClass, currMethod);
+            if(returnVar.varType == VarType.LOCALVAR && methodAttr.endNode.out.get(returnValue).isConstant()) returnValue = methodAttr.endNode.out.get(returnValue).value;
+         }
+
+         out("return " + returnValue + ";");
+         out("}");
       }
 
       return null;
@@ -527,15 +646,23 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
          // Special Processing
          String varName = n.f0.f0.tokenImage;
          VarAttr type = getType(varName, currClass, currMethod);
+         ExprReturn exprReturn = (ExprReturn)n.f2.accept(this, argu);
 
          if(type.varType == VarType.LOCALVAR && (type.dtype == "int" || type.dtype =="boolean"))
          {
-            ExprReturn exprReturn = (ExprReturn)n.f2.accept(this, argu);
-
             if(exprReturn.isConst) cfgNode.out.get(varName).setConstant(exprReturn.value);
             else cfgNode.out.get(varName).setBottom();
          }
+         processNode(cfgNode.posNext);
+      }
+      else
+      {
+         // Printing Pass
+         CFGNode cfgNode = (CFGNode)argu;
+         String varName = n.f0.f0.tokenImage;
+         ExprReturn exprReturn = (ExprReturn)n.f2.accept(this, argu);
 
+         out(varName + " = " + exprReturn.value + ";");
          processNode(cfgNode.posNext);
       }
 
@@ -568,6 +695,23 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
 
          processNode(cfgNode.posNext);
       }
+      else 
+      {
+         // Printing Pass
+         CFGNode cfgNode = (CFGNode)argu;
+         String varName = n.f0.f0.tokenImage;
+         String indexName = n.f2.f0.tokenImage;
+         String valueName = n.f5.f0.tokenImage;
+
+         VarAttr indexType = getType(indexName, currClass, currMethod);
+         VarAttr valueType = getType(valueName, currClass, currMethod);
+
+         if(indexType.varType == VarType.LOCALVAR &&  cfgNode.in.get(indexName).isConstant()) indexName = cfgNode.in.get(indexName).value;
+         if(valueType.varType == VarType.LOCALVAR &&  cfgNode.in.get(valueName).isConstant()) valueName = cfgNode.in.get(valueName).value;
+
+         out(varName + "[" + indexName + "] = " + valueName + ";");
+         processNode(cfgNode.posNext);
+      }
 
       return null;
    }
@@ -595,6 +739,20 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
 
          // No special processing required for field assignment
 
+         processNode(cfgNode.posNext);
+      }
+      else
+      {
+         // Printing Pass
+         CFGNode cfgNode = (CFGNode)argu;
+         String varName = n.f0.f0.tokenImage;
+         String fieldName = n.f2.f0.tokenImage;
+         String valueName = n.f4.f0.tokenImage;
+
+         VarAttr valueType = getType(valueName, currClass, currMethod);
+         if(valueType.varType == VarType.LOCALVAR &&  cfgNode.in.get(valueName).isConstant()) valueName = cfgNode.in.get(valueName).value;
+
+         out(varName + "." + fieldName + " = " + valueName + ";");
          processNode(cfgNode.posNext);
       }
 
@@ -662,6 +820,27 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
          }
          processNode(cfgNode.ifDummy);
       }
+      else
+      {
+         // Printing Pass
+
+         CFGNode cfgNode = (CFGNode)argu;
+         String condName = n.f2.f0.tokenImage;
+
+         VarAttr condType = getType(condName, currClass, currMethod);
+         if(condType.varType == VarType.LOCALVAR && cfgNode.in.get(condName).isConstant()) condName = cfgNode.in.get(condName).value;
+
+         out("if(" + condName + ")");
+         out("{");
+         processNode(cfgNode.posNext);
+         out("}");
+         out("else");
+         out("{");
+         processNode(cfgNode.negNext);
+         out("}");
+
+         processNode(cfgNode.ifDummy);
+      }
 
       return null;
    }
@@ -678,17 +857,18 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
       if(visit == 0)
       {
          CFGNode cfgNode = new CFGNode(StatementType.WHILE, n, currClass, currMethod, symbolTable);
+         CFGNode cfgNodeDummy = new CFGNode(StatementType.NOP, null, currClass, currMethod, symbolTable);
 
          StmtReturn stmtReturn = (StmtReturn)n.f4.accept(this, argu);
-
          stmtReturn.beginNode.setParents(cfgNode, null);
-
          //Stmt.endNode will not have posNext it will return here
 
-         cfgNode.setPosNext(stmtReturn.beginNode);
          cfgNode.setParent2(stmtReturn.endNode);
+         cfgNode.setNexts(stmtReturn.beginNode, cfgNodeDummy);
 
-         return (R)new StmtReturn(cfgNode, cfgNode);
+         cfgNodeDummy.setParents(cfgNode, null);
+
+         return (R)new StmtReturn(cfgNode, cfgNodeDummy);
       }
       else if(visit == 1)
       {
@@ -700,16 +880,18 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
          String condName = n.f2.f0.tokenImage;
          VarAttr type = getType(condName, currClass, currMethod);
 
-         if(type.varType == VarType.LOCALVAR && cfgNode.in.get(condName).isConstant() && cfgNode.in.get(condName).value.equals("true"))
+         if(type.varType == VarType.LOCALVAR)
          {
             // Conditional constant propagation
             
-            do 
+            while(cfgNode.in.get(condName).isConstant() && cfgNode.in.get(condName).value.equals("true"))
             {
                processNode(cfgNode.posNext);
                cfgNode.dataFlowMeet();
+
+               if(checkCopyDF(cfgNode.in, cfgNode.out) == false) break;
             }
-            while(cfgNode.in.get(condName).isConstant() && cfgNode.in.get(condName).value.equals("true") && checkCopyDF(cfgNode.in, cfgNode.out));
+            copyDataFlow(cfgNode.in, cfgNode.out);
          }
          else
          {
@@ -720,6 +902,23 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
             }
             while(checkCopyDF(cfgNode.in, cfgNode.out));
          }
+
+         processNode(cfgNode.negNext);
+      }
+      else 
+      {
+         // Printing Pass
+
+         CFGNode cfgNode = (CFGNode)argu;
+         String condName = n.f2.f0.tokenImage;
+         VarAttr condType = getType(condName, currClass, currMethod);
+
+         if(condType.varType == VarType.LOCALVAR && cfgNode.in.get(condName).isConstant()) condName = cfgNode.in.get(condName).value;
+
+         out("while(" + condName + ")");
+         out("{");
+         processNode(cfgNode.posNext);
+         out("}");
 
          processNode(cfgNode.negNext);
       }
@@ -746,19 +945,22 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
    {
       if(visit == 0)
       {
-         CFGNode cfgNodeInit = new CFGNode(StatementType.FORINIT, null, currClass, currMethod, symbolTable);
-         CFGNode cfgNode = new CFGNode(StatementType.FORCOND, n, currClass, currMethod, symbolTable);
+         CFGNode cfgNodeInit = new CFGNode(StatementType.FORINIT, n, currClass, currMethod, symbolTable);
+         CFGNode cfgNode = new CFGNode(StatementType.FORCOND, null, currClass, currMethod, symbolTable);
+         CFGNode cfgNodeDummy = new CFGNode(StatementType.NOP, null, currClass, currMethod, symbolTable);
 
-         StmtReturn stmtReturn = (StmtReturn)n.f4.accept(this, argu);
-
+         StmtReturn stmtReturn = (StmtReturn)n.f12.accept(this, argu);
          stmtReturn.beginNode.setParents(cfgNode, null);
-
          // Stmt.endNode will not have posNext it will return here
 
          cfgNode.setParents(cfgNodeInit, stmtReturn.endNode);
+         cfgNode.setNexts(stmtReturn.beginNode, cfgNodeDummy);
+
          cfgNodeInit.setNexts(cfgNode, null);
+
+         cfgNodeDummy.setParents(cfgNode, null);
          
-         return (R)new StmtReturn(cfgNodeInit, cfgNode);
+         return (R)new StmtReturn(cfgNodeInit, cfgNodeDummy);
       }
       else if(visit == 1)
       {
@@ -768,46 +970,78 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
          cfgNodeInit.dataFlowMeet();
          copyDataFlow(cfgNodeInit.in, cfgNodeInit.out);
 
-         // Special Processing
+         // Iterator Initialization
          String varName = n.f2.f0.tokenImage;
          VarAttr type = getType(varName, currClass, currMethod);
+         ExprReturn exprReturn1 = (ExprReturn)n.f4.accept(this, (A)cfgNodeInit);
 
-         if(type.varType == VarType.LOCALVAR)
-         {
-            ExprReturn exprReturn = (ExprReturn)n.f4.accept(this, (A)cfgNodeInit);
-
-            if(exprReturn.isConst) cfgNodeInit.out.get(varName).setConstant(exprReturn.value);
-            else cfgNodeInit.out.get(varName).setBottom();
-         }
+         if(type.varType == VarType.LOCALVAR && exprReturn1.isConst) cfgNodeInit.out.get(varName).setConstant(exprReturn1.value);
+         else cfgNodeInit.out.get(varName).setBottom();
 
          cfgNode.dataFlowMeet();
          copyDataFlow(cfgNode.in, cfgNode.out);
 
-         // Special Processing
+         // Calculate Condition
+         ExprReturn condExprReturn = (ExprReturn)n.f6.accept(this, (A)cfgNode);
 
-         ExprReturn exprReturn = (ExprReturn)n.f6.accept(this, (A)cfgNode);
-
-         if(exprReturn.isConst && exprReturn.value.equals("true"))
+         // if the expression is constant
+         while(condExprReturn.isConst && condExprReturn.value.equals("true"))
          {
-            // Conditional constant propagation
+            processNode(cfgNode.posNext);
+            cfgNode.dataFlowMeet();
 
+            String changeVar = n.f8.f0.tokenImage;
+            VarAttr changeType = getType(changeVar, currClass, currMethod);
+            ExprReturn exprReturn2 = (ExprReturn)n.f10.accept(this, (A)cfgNode);
+
+            if(changeType.varType == VarType.LOCALVAR && exprReturn2.isConst) cfgNode.in.get(changeVar).setConstant(exprReturn2.value);
+            else cfgNode.in.get(changeVar).setBottom();
+
+            if(checkCopyDF(cfgNode.in, cfgNode.out) == false) break; // No change
+
+            condExprReturn = (ExprReturn)n.f6.accept(this, (A)cfgNode);
+         }
+
+         if(!condExprReturn.isConst)
+         {
+            // if the expression is not constant (2 cases - non const from beginning and non const after some iterations)
             do
             {
                processNode(cfgNode.posNext);
                cfgNode.dataFlowMeet();
+   
+               String changeVar = n.f8.f0.tokenImage;
+               VarAttr changeType = getType(changeVar, currClass, currMethod);
+               ExprReturn exprReturn2 = (ExprReturn)n.f10.accept(this, (A)cfgNode);
 
+               if(changeType.varType == VarType.LOCALVAR && exprReturn2.isConst) cfgNode.in.get(changeVar).setConstant(exprReturn2.value);
+               else cfgNode.in.get(changeVar).setBottom();
             }
             while(checkCopyDF(cfgNode.in, cfgNode.out));
          }
-         else
-         {
-            do
-            {
-               processNode(cfgNode.posNext);
-               cfgNode.dataFlowMeet();
-            }
-            while(checkCopyDF(cfgNode.in, cfgNode.out));
-         }
+
+         processNode(cfgNode.negNext);
+      }
+      else
+      {
+         // Printing Pass
+
+         CFGNode cfgNodeInit = (CFGNode)argu;
+         CFGNode cfgNode = cfgNodeInit.posNext;
+
+         ExprReturn exprReturn1 = (ExprReturn)n.f4.accept(this, (A)cfgNodeInit);
+         ExprReturn exprReturn2 = (ExprReturn)n.f6.accept(this, (A)cfgNode);
+         ExprReturn exprReturn3 = (ExprReturn)n.f10.accept(this, (A)cfgNode);
+
+         String var1 = n.f2.f0.tokenImage;
+         String var2 = n.f8.f0.tokenImage;
+
+         out("for(" + var1 + " = " + exprReturn1.value + "; " + exprReturn2.value + "; " + var2 + " = " + exprReturn3.value + ")");
+         out("{");
+         processNode(cfgNode.posNext);
+         out("}");
+
+         processNode(cfgNode.negNext);
       }
 
       return null;
@@ -837,6 +1071,18 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
 
          processNode(cfgNode.posNext);
       }
+      else 
+      {
+         // Printing Pass
+         CFGNode cfgNode = (CFGNode)argu;
+         String varName = n.f2.f0.tokenImage;
+
+         VarAttr type = getType(varName, currClass, currMethod);
+         if(type.varType == VarType.LOCALVAR && cfgNode.in.get(varName).isConstant()) varName = cfgNode.in.get(varName).value;
+
+         out("System.out.println(" + varName + ");");
+         processNode(cfgNode.posNext);
+      }
 
       return null;
    }
@@ -853,10 +1099,9 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
     *       | FieldRead()
     *       | PrimaryExpression()
     */
-   public R visit(Expression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(Expression n, A argu) 
+   {
+      return n.f0.accept(this, argu);
    }
 
    /**
@@ -864,12 +1109,31 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
     * f1 -> "&"
     * f2 -> Identifier()
     */
-   public R visit(AndExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(AndExpression n, A argu) 
+   {
+      CFGNode cfgNode = (CFGNode)argu;
+
+      String var1 = n.f0.f0.tokenImage;
+      String var2 = n.f2.f0.tokenImage;
+
+      String value = null;
+      boolean constType = false;
+      if(isLocalConst(var1, cfgNode) && isLocalConst(var2, cfgNode))
+      {
+         value = (Integer.parseInt(cfgNode.in.get(var1).value) & Integer.parseInt(cfgNode.in.get(var2).value)) + "";
+         constType = true;
+      }
+      else if(isLocalConst(var1, cfgNode))
+      {
+         value = (Integer.parseInt(cfgNode.in.get(var1).value)) + " & " + var2;
+      }
+      else if(isLocalConst(var2, cfgNode))
+      {
+         value = var1 + " & " + (Integer.parseInt(cfgNode.in.get(var2).value)) + "";
+      }
+      else value = var1 + " & " + var2;
+
+      return (R)new ExprReturn(constType, value);
    }
 
    /**
@@ -877,12 +1141,31 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
     * f1 -> "<"
     * f2 -> Identifier()
     */
-   public R visit(CompareExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(CompareExpression n, A argu) 
+   {
+      CFGNode cfgNode = (CFGNode)argu;
+
+      String var1 = n.f0.f0.tokenImage;
+      String var2 = n.f2.f0.tokenImage;
+
+      String value = null;
+      boolean constType = false;
+      if(isLocalConst(var1, cfgNode) && isLocalConst(var2, cfgNode))
+      {
+         value = (Integer.parseInt(cfgNode.in.get(var1).value) < Integer.parseInt(cfgNode.in.get(var2).value)) + "";
+         constType = true;
+      }
+      else if(isLocalConst(var1, cfgNode))
+      {
+         value = (Integer.parseInt(cfgNode.in.get(var1).value)) + " < " + var2;
+      }
+      else if(isLocalConst(var2, cfgNode))
+      {
+         value = var1 + " < " + (Integer.parseInt(cfgNode.in.get(var2).value)) + "";
+      }
+      else value = var1 + " < " + var2;
+
+      return (R)new ExprReturn(constType, value);
    }
 
    /**
@@ -890,12 +1173,31 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
     * f1 -> "+"
     * f2 -> Identifier()
     */
-   public R visit(PlusExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(PlusExpression n, A argu) 
+   {
+      CFGNode cfgNode = (CFGNode)argu;
+
+      String var1 = n.f0.f0.tokenImage;
+      String var2 = n.f2.f0.tokenImage;
+
+      String value = null;
+      boolean constType = false;
+      if(isLocalConst(var1, cfgNode) && isLocalConst(var2, cfgNode))
+      {
+         value = (Integer.parseInt(cfgNode.in.get(var1).value) + Integer.parseInt(cfgNode.in.get(var2).value)) + "";
+         constType = true;
+      }
+      else if(isLocalConst(var1, cfgNode))
+      {
+         value = (Integer.parseInt(cfgNode.in.get(var1).value)) + " + " + var2;
+      }
+      else if(isLocalConst(var2, cfgNode))
+      {
+         value = var1 + " + " + (Integer.parseInt(cfgNode.in.get(var2).value)) + "";
+      }
+      else value = var1 + " + " + var2;
+
+      return (R)new ExprReturn(constType, value);
    }
 
    /**
@@ -903,12 +1205,31 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
     * f1 -> "-"
     * f2 -> Identifier()
     */
-   public R visit(MinusExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(MinusExpression n, A argu) 
+   {
+      CFGNode cfgNode = (CFGNode)argu;
+
+      String var1 = n.f0.f0.tokenImage;
+      String var2 = n.f2.f0.tokenImage;
+
+      String value = null;
+      boolean constType = false;
+      if(isLocalConst(var1, cfgNode) && isLocalConst(var2, cfgNode))
+      {
+         value = (Integer.parseInt(cfgNode.in.get(var1).value) - Integer.parseInt(cfgNode.in.get(var2).value)) + "";
+         constType = true;
+      }
+      else if(isLocalConst(var1, cfgNode))
+      {
+         value = (Integer.parseInt(cfgNode.in.get(var1).value)) + " - " + var2;
+      }
+      else if(isLocalConst(var2, cfgNode))
+      {
+         value = var1 + " - " + (Integer.parseInt(cfgNode.in.get(var2).value)) + "";
+      }
+      else value = var1 + " - " + var2;
+
+      return (R)new ExprReturn(constType, value);
    }
 
    /**
@@ -916,12 +1237,31 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
     * f1 -> "*"
     * f2 -> Identifier()
     */
-   public R visit(TimesExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(TimesExpression n, A argu) 
+   {
+      CFGNode cfgNode = (CFGNode)argu;
+
+      String var1 = n.f0.f0.tokenImage;
+      String var2 = n.f2.f0.tokenImage;
+
+      String value = null;
+      boolean constType = false;
+      if(isLocalConst(var1, cfgNode) && isLocalConst(var2, cfgNode))
+      {
+         value = (Integer.parseInt(cfgNode.in.get(var1).value) * Integer.parseInt(cfgNode.in.get(var2).value)) + "";
+         constType = true;
+      }
+      else if(isLocalConst(var1, cfgNode))
+      {
+         value = (Integer.parseInt(cfgNode.in.get(var1).value)) + " * " + var2;
+      }
+      else if(isLocalConst(var2, cfgNode))
+      {
+         value = var1 + " * " + (Integer.parseInt(cfgNode.in.get(var2).value)) + "";
+      }
+      else value = var1 + " * " + var2;
+
+      return (R)new ExprReturn(constType, value);
    }
 
    /**
@@ -930,13 +1270,16 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
     * f2 -> Identifier()
     * f3 -> "]"
     */
-   public R visit(ArrayLookup n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      return _ret;
+   public R visit(ArrayLookup n, A argu) 
+   {
+      CFGNode cfgNode = (CFGNode)argu;
+
+      String var1 = n.f0.f0.tokenImage;
+      String var2 = n.f2.f0.tokenImage;
+
+      if(isLocalConst(var2, cfgNode)) var2 = cfgNode.in.get(var2).value;
+
+      return (R)new ExprReturn(false, var1 + "[" + var2 + "]");
    }
 
    /**
@@ -944,12 +1287,9 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
     * f1 -> "."
     * f2 -> "length"
     */
-   public R visit(ArrayLength n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(ArrayLength n, A argu) 
+   {
+      return (R)new ExprReturn(false, n.f0.f0.tokenImage + ".length");
    }
 
    /**
@@ -957,12 +1297,9 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
     * f1 -> "."
     * f2 -> Identifier()
     */
-   public R visit(FieldRead n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(FieldRead n, A argu) 
+   {
+      return (R)new ExprReturn(false, n.f0.f0.tokenImage + "." + n.f2.f0.tokenImage);
    }
 
    /**
@@ -973,53 +1310,74 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
     * f4 -> ( ArgList() )?
     * f5 -> ")"
     */
-   public R visit(MessageSend n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      n.f5.accept(this, argu);
-      return _ret;
+   public R visit(MessageSend n, A argu) 
+   {
+      CFGNode cfgNode = (CFGNode)argu;
+      ExprReturn exprReturn = (ExprReturn)n.f0.accept(this, argu);
+      String id = n.f2.f0.tokenImage;
+
+      ArrayList<String> argList = new ArrayList<String>();
+      n.f4.accept(this, (A)argList);
+
+      for(int i = 0; i < argList.size(); i++)
+      {
+         String var = argList.get(i);
+         if(isLocalConst(var, cfgNode)) var = cfgNode.in.get(var).value;
+      }
+
+      String argListString = String.join(", ", argList);
+      return (R)new ExprReturn(false, exprReturn.value + "." + id + "(" + argListString + ")");
    }
 
    /**
     * f0 -> Identifier()
     * f1 -> ( ArgRest() )*
     */
-   public R visit(ArgList n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
+   public R visit(ArgList n, A argu) 
+   {
+      String id = n.f0.f0.tokenImage;
+      ((ArrayList<String>)argu).add(id);
       n.f1.accept(this, argu);
-      return _ret;
+      return null;
    }
 
    /**
     * f0 -> ","
     * f1 -> Identifier()
     */
-   public R visit(ArgRest n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      return _ret;
+   public R visit(ArgRest n, A argu) 
+   {
+      String id = n.f1.f0.tokenImage;
+      ((ArrayList<String>)argu).add(id);
+      return null;
    }
 
    /**
-    * f0 -> IntegerLiteral()
-    *       | TrueLiteral()
-    *       | FalseLiteral()
-    *       | Identifier()
-    *       | ThisExpression()
-    *       | ArrayAllocationExpression()
-    *       | AllocationExpression()
-    *       | NotExpression()
+    * f0 -> IntegerLiteral() 0
+    *       | TrueLiteral() 1
+    *       | FalseLiteral() 2
+    *       | Identifier() 3
+    *       | ThisExpression() 4
+    *       | ArrayAllocationExpression() 5
+    *       | AllocationExpression() 6
+    *       | NotExpression() 7
     */
-   public R visit(PrimaryExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(PrimaryExpression n, A argu) 
+   {
+      CFGNode cfgNode = (CFGNode)argu;
+
+      if(n.f0.which < 3) return (R)new ExprReturn(true, (String)n.f0.accept(this, argu));
+      else if(n.f0.which == 3)
+      {
+         String var = (String)n.f0.accept(this, argu);
+
+         if(isLocalConst(var, cfgNode)) 
+            return (R)new ExprReturn(true, cfgNode.in.get(var).value);
+         else 
+            return (R)new ExprReturn(false, var);
+      }
+
+      return n.f0.accept(this, argu);
    }
 
    /**
@@ -1069,14 +1427,15 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
     * f3 -> Identifier()
     * f4 -> "]"
     */
-   public R visit(ArrayAllocationExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      return _ret;
+   public R visit(ArrayAllocationExpression n, A argu) 
+   {
+      CFGNode cfgNode = (CFGNode)argu;
+
+      String var = n.f3.f0.tokenImage;
+
+      if(isLocalConst(var, cfgNode)) var = cfgNode.in.get(var).value;
+
+      return (R)new ExprReturn(false, "new int[" + var + "]");
    }
 
    /**
@@ -1085,24 +1444,32 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
     * f2 -> "("
     * f3 -> ")"
     */
-   public R visit(AllocationExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      return _ret;
+   public R visit(AllocationExpression n, A argu) 
+   {
+      return (R)new ExprReturn(false, "new " + n.f1.f0.tokenImage + "()");
    }
 
    /**
     * f0 -> "!"
     * f1 -> Identifier()
     */
-   public R visit(NotExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      return _ret;
+   public R visit(NotExpression n, A argu) 
+   {
+      CFGNode cfgNode = (CFGNode)argu;
+
+      String var = n.f1.f0.tokenImage;
+
+      String value = null;
+      if(isLocalConst(var, cfgNode))
+      {
+         boolean v = !cfgNode.in.get(var).value.equals("true");
+         value = v ? "true" : "false";
+
+         return (R)new ExprReturn(true, value);
+      }
+      else value = "!" + var;
+
+      return (R)new ExprReturn(false, value);
    }
 
 }

@@ -11,6 +11,9 @@ public class MethodAttr
     public int paramCount;
     public int localVarCount;
     public CFGNode startNode;
+    public CFGNode endNode;
+
+    public HashMap<String, CFGNode> labelToNode;
 
     int labelCount;
 
@@ -23,7 +26,10 @@ public class MethodAttr
         this.paramCount = 0;
         this.localVarCount = 0;
         this.startNode = null;
+        this.endNode = null;
         this.labelCount = 0;
+
+        this.labelToNode = new HashMap<String, CFGNode>();
     }
 
     public void addParam(String name, String type)
