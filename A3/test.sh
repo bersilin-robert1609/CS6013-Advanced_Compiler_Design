@@ -45,7 +45,7 @@ notest=0
 nocompile=0
 gen_output=1
 grammar_only=0
-clear_f=0
+clear_f=1
 set_dir=0
 dir="../../../Test/A3"
 set_exec=0
@@ -418,7 +418,7 @@ else
     then
         cd ..
         find . -name "*.class" | xargs rm 2>/dev/null
-        cd P3
-        rm -rf $MY_OUTPUT_DIR/public/* $MY_OUTPUT_DIR/custom_run/* $MY_OUTPUT_DIR/custom_norun/*
+        # cd P3
+        # rm -rf $MY_OUTPUT_DIR/public/* $MY_OUTPUT_DIR/custom_run/* $MY_OUTPUT_DIR/custom_norun/*
     fi
 fi
