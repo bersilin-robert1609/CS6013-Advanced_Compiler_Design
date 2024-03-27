@@ -405,14 +405,14 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
    public R visit(ArrayAssignmentStatement n, A argu) 
    {
       String definedName = (String)n.f0.accept(this, argu);
+      ArguClass arg = (ArguClass)argu;
+      
+      if(isMethodVar(definedName, argu) && !arg.definedVariables.contains(definedName))
+      {
+         varDeclared = false;
+      }
       n.f2.accept(this, argu);
       n.f5.accept(this, argu);
-
-      if(isMethodVar(definedName, argu))
-      {
-         ArguClass arg = (ArguClass)argu;
-         arg.definedVariables.add(definedName);
-      }
       return null;
    }
 
