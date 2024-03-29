@@ -830,14 +830,29 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
          VarAttr condType = getType(condName, currClass, currMethod);
          if(condType.varType == VarType.LOCALVAR && cfgNode.in.get(condName).isConstant()) condName = cfgNode.in.get(condName).value;
 
-         out("if(" + condName + ")");
-         out("{");
-         processNode(cfgNode.posNext);
-         out("}");
-         out("else");
-         out("{");
-         processNode(cfgNode.negNext);
-         out("}");
+         if(condName.equals("true"))
+         {
+            out("{");
+            processNode(cfgNode.posNext);
+            out("}");
+         }
+         else if(condName.equals("false"))
+         {
+            out("{");
+            processNode(cfgNode.negNext);
+            out("}");
+         }
+         else
+         {
+            out("if(" + condName + ")");
+            out("{");
+            processNode(cfgNode.posNext);
+            out("}");
+            out("else");
+            out("{");
+            processNode(cfgNode.negNext);
+            out("}");
+         }
 
          processNode(cfgNode.ifDummy);
       }
@@ -1050,10 +1065,13 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A>
          String var1 = n.f2.f0.tokenImage;
          String var2 = n.f8.f0.tokenImage;
 
-         out("for(" + var1 + " = " + exprReturn1.value + "; " + exprReturn2.value + "; " + var2 + " = " + exprReturn3.value + ")");
-         out("{");
-         processNode(cfgNode.posNext);
-         out("}");
+         if(!(exprReturn2.isConst && exprReturn2.value.equals("false")))
+         {
+            out("for(" + var1 + " = " + exprReturn1.value + "; " + exprReturn2.value + "; " + var2 + " = " + exprReturn3.value + ")");
+            out("{");
+            processNode(cfgNode.posNext);
+            out("}");
+         }
 
          processNode(cfgNode.negNext);
       }
