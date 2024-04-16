@@ -5,6 +5,7 @@
 package visitor;
 import syntaxtree.*;
 import java.util.*;
+import attributes.*;
 
 /**
  * Provides default methods which visit each node in the tree in depth-first
@@ -58,6 +59,29 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
    public R visit(NodeToken n, A argu) { return null; }
 
    //
+   // Local Class Variables
+   //
+
+   HashMap<String, ClassAttr> symbolTable = new HashMap<String, ClassAttr>();
+   HashMap<String, String> parentMap = new HashMap<String, String>();
+   HashMap<String, ArrayList<String>> childrenMap = new HashMap<String, ArrayList<String>>();
+
+   int visit; // Indicator for the number of visit
+   int globalStmtNumber; // Global Statement number
+   int localStmtNumber; // Local Statement number for each method
+
+   // Current attributes
+   String currClass;
+   String currMethod;
+
+   boolean DEBUG = true;
+
+   void debugPrint(String s)
+   {
+      if(DEBUG) System.err.println(s);
+   }
+
+   //
    // User-generated visitor methods below
    //
 
@@ -66,12 +90,22 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> ( TypeDeclaration() )*
     * f2 -> <EOF>
     */
-   public R visit(Goal n, A argu) {
-      R _ret=null;
+   public R visit(Goal n, A argu) 
+   {
+      currClass = null; currMethod = null;
+
+      visit = 0; // Building the symbol table
       n.f0.accept(this, argu);
       n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+
+      currClass = null; currMethod = null;
+      globalStmtNumber = 0;
+
+      visit = 1; // Building the call graph
+      n.f0.accept(this, argu);
+      n.f1.accept(this, argu);
+
+      return null;
    }
 
    /**
@@ -94,37 +128,45 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f16 -> "}"
     * f17 -> "}"
     */
-   public R visit(MainClass n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      n.f5.accept(this, argu);
-      n.f6.accept(this, argu);
-      n.f7.accept(this, argu);
-      n.f8.accept(this, argu);
-      n.f9.accept(this, argu);
-      n.f10.accept(this, argu);
-      n.f11.accept(this, argu);
-      n.f12.accept(this, argu);
-      n.f13.accept(this, argu);
-      n.f14.accept(this, argu);
-      n.f15.accept(this, argu);
-      n.f16.accept(this, argu);
-      n.f17.accept(this, argu);
-      return _ret;
+   public R visit(MainClass n, A argu) 
+   {
+      String className = n.f1.f0.tokenImage;
+      String methodName = n.f6.tokenImage;
+
+      if(visit == 0)
+      {
+         ClassAttr classAttr = new ClassAttr(className, null);
+         parentMap.put(className, null);
+         symbolTable.put(className, classAttr);
+         childrenMap.put(className, new ArrayList<String>());
+         currClass = className;
+
+         MethodAttr methodAttr = new MethodAttr(methodName, className, "void");
+         classAttr.methods.put(methodName, methodAttr);
+         currMethod = methodName;
+
+         n.f14.accept(this, null);
+      }
+      else if(visit == 1)
+      {
+         currClass = className;
+         currMethod = methodName;
+
+         localStmtNumber = 0;
+         n.f15.accept(this, null);
+      }
+
+      return null;
    }
 
    /**
     * f0 -> ClassDeclaration()
     *       | ClassExtendsDeclaration()
     */
-   public R visit(TypeDeclaration n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(TypeDeclaration n, A argu) 
+   {
+      n.f0.accept(this, argu); // For all visits
+      return null;
    }
 
    /**
@@ -135,15 +177,33 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f4 -> ( MethodDeclaration() )*
     * f5 -> "}"
     */
-   public R visit(ClassDeclaration n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      n.f5.accept(this, argu);
-      return _ret;
+   public R visit(ClassDeclaration n, A argu) 
+   {
+      String className = n.f1.f0.tokenImage;
+      
+      if(visit == 0)
+      {
+         ClassAttr classAttr = new ClassAttr(className, null);
+
+         parentMap.put(className, null);
+         symbolTable.put(className, classAttr);
+         childrenMap.put(className, new ArrayList<String>());
+
+         currClass = className;
+         currMethod = null;
+
+         n.f3.accept(this, null);
+         n.f4.accept(this, null);
+      }
+      else if(visit == 1)
+      {
+         currClass = className;
+         currMethod = null;
+
+         n.f4.accept(this, null);
+      }
+
+      return null;
    }
 
    /**
@@ -156,17 +216,35 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f6 -> ( MethodDeclaration() )*
     * f7 -> "}"
     */
-   public R visit(ClassExtendsDeclaration n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      n.f5.accept(this, argu);
-      n.f6.accept(this, argu);
-      n.f7.accept(this, argu);
-      return _ret;
+   public R visit(ClassExtendsDeclaration n, A argu) 
+   {
+      String className = n.f1.f0.tokenImage;
+      String parentName = n.f3.f0.tokenImage;
+
+      if(visit == 0)
+      {
+         ClassAttr classAttr = new ClassAttr(className, parentName);
+
+         parentMap.put(className, parentName);
+         symbolTable.put(className, classAttr);
+         childrenMap.get(parentName).add(className);
+         childrenMap.put(className, new ArrayList<String>());
+         
+         currClass = className;
+         currMethod = null;
+
+         n.f5.accept(this, null);
+         n.f6.accept(this, null);
+      }
+      else if(visit == 1)
+      {
+         currClass = className;
+         currMethod = null;
+
+         n.f6.accept(this, null);
+      }
+
+      return null;
    }
 
    /**
@@ -174,12 +252,17 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> Identifier()
     * f2 -> ";"
     */
-   public R visit(VarDeclaration n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(VarDeclaration n, A argu) 
+   {
+      assert(visit == 0);
+
+      String varType = (String)n.f0.accept(this, null);
+      String varName = n.f1.f0.tokenImage;
+
+      if(currMethod == null) symbolTable.get(currClass).addClassVar(varName, varType);
+      else symbolTable.get(currClass).methods.get(currMethod).addMethodVar(varName, varType);
+
+      return null;
    }
 
    /**
@@ -197,55 +280,67 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f11 -> ";"
     * f12 -> "}"
     */
-   public R visit(MethodDeclaration n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      n.f5.accept(this, argu);
-      n.f6.accept(this, argu);
-      n.f7.accept(this, argu);
-      n.f8.accept(this, argu);
-      n.f9.accept(this, argu);
-      n.f10.accept(this, argu);
-      n.f11.accept(this, argu);
-      n.f12.accept(this, argu);
-      return _ret;
+   public R visit(MethodDeclaration n, A argu) 
+   {
+      String methodName = n.f2.f0.tokenImage;
+
+      if(visit == 0)
+      {
+         String returnType = (String)n.f1.accept(this, null);
+         MethodAttr methodAttr = new MethodAttr(methodName, currClass, returnType);
+         symbolTable.get(currClass).methods.put(methodName, methodAttr);
+
+         currMethod = methodName;
+
+         n.f4.accept(this, null);
+         n.f7.accept(this, null);
+      }
+      else if(visit == 1)
+      {
+         currMethod = methodName;
+
+         localStmtNumber = 0;
+         n.f8.accept(this, null);
+      }
+
+      return null;
    }
 
    /**
     * f0 -> FormalParameter()
     * f1 -> ( FormalParameterRest() )*
     */
-   public R visit(FormalParameterList n, A argu) {
-      R _ret=null;
+   public R visit(FormalParameterList n, A argu) 
+   {
       n.f0.accept(this, argu);
       n.f1.accept(this, argu);
-      return _ret;
+      return null;
    }
 
    /**
     * f0 -> Type()
     * f1 -> Identifier()
     */
-   public R visit(FormalParameter n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      return _ret;
+   public R visit(FormalParameter n, A argu) 
+   {
+      assert(visit == 0);
+
+      String varType = (String)n.f0.accept(this, null);
+      String varName = n.f1.f0.tokenImage;
+
+      symbolTable.get(currClass).methods.get(currMethod).addMethodParam(varName, varType);
+
+      return null;
    }
 
    /**
     * f0 -> ","
     * f1 -> FormalParameter()
     */
-   public R visit(FormalParameterRest n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
+   public R visit(FormalParameterRest n, A argu) 
+   {
       n.f1.accept(this, argu);
-      return _ret;
+      return null;
    }
 
    /**
@@ -254,10 +349,9 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     *       | IntegerType()
     *       | Identifier()
     */
-   public R visit(Type n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(Type n, A argu) 
+   {
+      return n.f0.accept(this, argu);
    }
 
    /**
@@ -265,30 +359,25 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> "["
     * f2 -> "]"
     */
-   public R visit(ArrayType n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(ArrayType n, A argu) 
+   {
+      return (R)(new String("int[]"));
    }
 
    /**
     * f0 -> "boolean"
     */
-   public R visit(BooleanType n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(BooleanType n, A argu) 
+   {
+      return (R)(new String("boolean"));
    }
 
    /**
     * f0 -> "int"
     */
-   public R visit(IntegerType n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(IntegerType n, A argu) 
+   {
+      return (R)(new String("int"));
    }
 
    /**
@@ -302,10 +391,10 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     *       | PrintStatement()
     *       | MessageSendStatement()
     */
-   public R visit(Statement n, A argu) {
-      R _ret=null;
+   public R visit(Statement n, A argu) 
+   {
       n.f0.accept(this, argu);
-      return _ret;
+      return null;
    }
 
    /**
@@ -313,12 +402,10 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> ( Statement() )*
     * f2 -> "}"
     */
-   public R visit(Block n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
+   public R visit(Block n, A argu) 
+   {
       n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+      return null;
    }
 
    /**
@@ -327,23 +414,32 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f2 -> RhsExpression()
     * f3 -> ";"
     */
-   public R visit(AssignmentStatement n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      return _ret;
+   public R visit(AssignmentStatement n, A argu) 
+   {
+      String varName = n.f0.f0.tokenImage;
+
+      if(visit == 1)
+      {
+         localStmtNumber++;
+         globalStmtNumber++;
+
+         n.f2.accept(this, argu);
+      }
+
+      return null;
    }
 
    /**
     * f0 -> DotExpression()
     *       | Expression()
     */
-   public R visit(RhsExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(RhsExpression n, A argu) 
+   {
+      if(visit == 1)
+      {
+         n.f0.accept(this, argu);
+      }
+      return null;
    }
 
    /**
@@ -355,16 +451,19 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f5 -> Identifier()
     * f6 -> ";"
     */
-   public R visit(ArrayAssignmentStatement n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      n.f5.accept(this, argu);
-      n.f6.accept(this, argu);
-      return _ret;
+   public R visit(ArrayAssignmentStatement n, A argu) 
+   {
+      String varName = n.f0.f0.tokenImage;
+      String arrayIndex = n.f2.f0.tokenImage;
+      String arrayValue = n.f5.f0.tokenImage;
+
+      if(visit == 1)
+      {
+         localStmtNumber++;
+         globalStmtNumber++;
+      }
+
+      return null;
    }
 
    /**
@@ -375,15 +474,19 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f4 -> Identifier()
     * f5 -> ";"
     */
-   public R visit(FieldAssignmentStatement n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      n.f5.accept(this, argu);
-      return _ret;
+   public R visit(FieldAssignmentStatement n, A argu) 
+   {
+      String varName = n.f0.f0.tokenImage;
+      String fieldName = n.f2.f0.tokenImage;
+      String fieldValue = n.f4.f0.tokenImage;
+
+      if(visit == 1)
+      {
+         localStmtNumber++;
+         globalStmtNumber++;
+      }
+
+      return null;
    }
 
    /**
@@ -395,16 +498,20 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f5 -> "else"
     * f6 -> Statement()
     */
-   public R visit(IfStatement n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      n.f5.accept(this, argu);
-      n.f6.accept(this, argu);
-      return _ret;
+   public R visit(IfStatement n, A argu) 
+   {
+      String condValue = n.f2.f0.tokenImage;
+
+      if(visit == 1)
+      {
+         localStmtNumber++;
+         globalStmtNumber++;
+
+         n.f4.accept(this, argu);
+         n.f6.accept(this, argu);
+      }
+
+      return null;
    }
 
    /**
@@ -414,14 +521,19 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f3 -> ")"
     * f4 -> Statement()
     */
-   public R visit(WhileStatement n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      return _ret;
+   public R visit(WhileStatement n, A argu) 
+   {
+      String condValue = n.f2.f0.tokenImage;
+
+      if(visit == 1)
+      {
+         localStmtNumber++;
+         globalStmtNumber++;
+
+         n.f4.accept(this, argu);
+      }
+
+      return null;
    }
 
    /**
@@ -439,22 +551,23 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f11 -> ")"
     * f12 -> Statement()
     */
-   public R visit(ForStatement n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      n.f5.accept(this, argu);
-      n.f6.accept(this, argu);
-      n.f7.accept(this, argu);
-      n.f8.accept(this, argu);
-      n.f9.accept(this, argu);
-      n.f10.accept(this, argu);
-      n.f11.accept(this, argu);
-      n.f12.accept(this, argu);
-      return _ret;
+   public R visit(ForStatement n, A argu) 
+   {
+      String initValue = n.f2.f0.tokenImage;
+      String updateValue = n.f8.f0.tokenImage;
+
+      if(visit == 1)
+      {
+         localStmtNumber++;
+         globalStmtNumber++;
+
+         n.f4.accept(this, argu);
+         n.f6.accept(this, argu);
+         n.f10.accept(this, argu);
+         n.f12.accept(this, argu);
+      }
+
+      return null;
    }
 
    /**
@@ -464,32 +577,38 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f3 -> ")"
     * f4 -> ";"
     */
-   public R visit(PrintStatement n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      return _ret;
+   public R visit(PrintStatement n, A argu) 
+   {
+      String printValue = n.f2.f0.tokenImage;
+
+      if(visit == 1)
+      {
+         localStmtNumber++;
+         globalStmtNumber++;
+      }
+
+      return null;
    }
 
    /**
     * f0 -> ( InlineAnn() )?
     * f1 -> ( VoidMessageSendStmt() | RetMessageSendStmt() )
     */
-   public R visit(MessageSendStatement n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      return _ret;
+   public R visit(MessageSendStatement n, A argu) 
+   {
+      boolean inlineable = n.f0.present();
+
+      // Currently here
+
+      return null;
    }
 
    /**
     * f0 -> MessageSend()
     * f1 -> ";"
     */
-   public R visit(VoidMessageSendStmt n, A argu) {
+   public R visit(VoidMessageSendStmt n, A argu) 
+   {
       R _ret=null;
       n.f0.accept(this, argu);
       n.f1.accept(this, argu);
@@ -516,12 +635,9 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> <INLINE>
     * f2 -> <SCOMMENT2>
     */
-   public R visit(InlineAnn n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
+   public R visit(InlineAnn n, A argu) 
+   {
+      return null;
    }
 
    /**
