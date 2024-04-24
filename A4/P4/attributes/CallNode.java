@@ -1,50 +1,32 @@
 package attributes;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 
 public class CallNode 
 {
-    public int globalSiteNumber;
-    public int localSiteNumber;
-    public String methodName;
-    public HashSet<CallSignature> callSigns;
+    public HashSet<MethodAttr> callSigns;
     public boolean inlineable;
+    public boolean monomorphic;
+    public boolean shouldInline;
 
-    public CallNode(int globalSiteNumber, int localSiteNumber, String methodName, boolean inlineable)
+    public CallNode()
     {
-        this.globalSiteNumber = globalSiteNumber;
-        this.localSiteNumber = localSiteNumber;
-        this.methodName = methodName;
-        this.callSigns = new HashSet<CallSignature>();
-        this.inlineable = inlineable;
+        this.callSigns = new HashSet<MethodAttr>();
+        this.inlineable = false;
+        this.monomorphic = false;
+        this.shouldInline = false;
     }
 
-    public void addSignatures(String varType, HashMap<String, ClassAttr> symbolTable, HashMap<String, String> parentMap, HashMap<String, ArrayList<String>> childrenMap)
+    public void printInfo()
     {
-        ClassAttr classAttr = symbolTable.get(varType); // First availability of the function in the parent side of the hierarchy
-        while(!classAttr.methods.containsKey(this.methodName) && classAttr.parentName != null)
+        System.out.println("CallNode:");
+        System.out.println("  Inlineable: " + this.inlineable);
+        System.out.println("  Monomorphic: " + this.monomorphic);
+        System.out.println("  ShouldInline: " + this.shouldInline);
+        System.out.println("  CallSigns:");
+        for(MethodAttr method : this.callSigns)
         {
-            classAttr = symbolTable.get(parentMap.get(classAttr.parentName));
-        }
-        callSigns.add(new CallSignature(classAttr.className, this.methodName));
-
-        addSignaturesTemp(varType, symbolTable, childrenMap);
-    }
-
-    public void addSignaturesTemp(String currClass, HashMap<String, ClassAttr> symbolTable, HashMap<String, ArrayList<String>> childrenMap)
-    {
-        if(currClass == null) return;
-
-        if(symbolTable.get(currClass).methods.containsKey(this.methodName))
-        {
-            callSigns.add(new CallSignature(currClass, this.methodName));
-        }
-        
-        for(String childName: childrenMap.get(currClass))
-        {
-            addSignaturesTemp(childName, symbolTable, childrenMap);
+            System.out.println("    Method: " + method.methodName + " in class: " + method.className);
         }
     }
 }

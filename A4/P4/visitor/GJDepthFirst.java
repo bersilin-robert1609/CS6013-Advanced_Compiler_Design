@@ -5,6 +5,9 @@
 package visitor;
 import syntaxtree.*;
 import java.util.*;
+
+import javax.print.DocFlavor.INPUT_STREAM;
+
 import attributes.*;
 
 /**
@@ -63,12 +66,10 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
    //
 
    HashMap<String, ClassAttr> symbolTable = new HashMap<String, ClassAttr>();
-   HashMap<String, String> parentMap = new HashMap<String, String>();
-   HashMap<String, ArrayList<String>> childrenMap = new HashMap<String, ArrayList<String>>();
+   HashMap<String, String> childParentAddLater = new HashMap<String, String>();
 
    int visit; // Indicator for the number of visit
-   int globalStmtNumber; // Global Statement number
-   int localStmtNumber; // Local Statement number for each method
+   int localStmtNumber; // Local Statement number
 
    // Current attributes
    String currClass;
@@ -79,6 +80,41 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
    void debugPrint(String s)
    {
       if(DEBUG) System.err.println(s);
+   }
+
+   void OUT(String str)
+   {
+      System.out.println(str);
+   }
+
+   String getType(String varName)
+   {
+      if(symbolTable.get(currClass).methods.get(currMethod).methodVars.containsKey(varName)) 
+         return symbolTable.get(currClass).methods.get(currMethod).methodVars.get(varName).dataType;
+      else if(symbolTable.get(currClass).methods.get(currMethod).methodParams.containsKey(varName))
+         return symbolTable.get(currClass).methods.get(currMethod).methodParams.get(varName).dataType;
+      else if(symbolTable.get(currClass).classVars.containsKey(varName))
+         return symbolTable.get(currClass).classVars.get(varName).dataType;
+      else
+      {
+         assert(false);
+         return null; // Execution should never reach here
+      }
+   }
+
+   String getTypeSpecific(String varName, String className, String methodName)
+   {
+      if(symbolTable.get(className).methods.get(methodName).methodVars.containsKey(varName)) 
+         return symbolTable.get(className).methods.get(methodName).methodVars.get(varName).dataType;
+      else if(symbolTable.get(className).methods.get(methodName).methodParams.containsKey(varName))
+         return symbolTable.get(className).methods.get(methodName).methodParams.get(varName).dataType;
+      else if(symbolTable.get(className).classVars.containsKey(varName))
+         return symbolTable.get(className).classVars.get(varName).dataType;
+      else
+      {
+         assert(false);
+         return null; // Execution should never reach here
+      }
    }
 
    //
@@ -98,10 +134,20 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       n.f0.accept(this, argu);
       n.f1.accept(this, argu);
 
+      // Process the childParentAddLater
+      for(Map.Entry<String, String> entry : childParentAddLater.entrySet()) symbolTable.get(entry.getKey()).children.add(entry.getValue());
+
       currClass = null; currMethod = null;
-      globalStmtNumber = 0;
 
       visit = 1; // Building the call graph
+      n.f0.accept(this, argu);
+      n.f1.accept(this, argu);
+
+      for(ClassAttr classAttr : symbolTable.values()) classAttr.checkRecursion();
+
+      currClass = null; currMethod = null;
+
+      visit = 2; // Inline the methods
       n.f0.accept(this, argu);
       n.f1.accept(this, argu);
 
@@ -136,9 +182,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       if(visit == 0)
       {
          ClassAttr classAttr = new ClassAttr(className, null);
-         parentMap.put(className, null);
          symbolTable.put(className, classAttr);
-         childrenMap.put(className, new ArrayList<String>());
          currClass = className;
 
          MethodAttr methodAttr = new MethodAttr(methodName, className, "void");
@@ -152,8 +196,26 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          currClass = className;
          currMethod = methodName;
 
-         localStmtNumber = 0;
          n.f15.accept(this, null);
+      }
+      else if(visit == 2)
+      {
+         currClass = className;
+         currMethod = methodName;
+
+         HashMap<String, String> variables = new HashMap<String, String>();
+         for(VarAttr varAttr : symbolTable.get(className).methods.get(methodName).methodVars.values()) variables.put(varAttr.varName, varAttr.dataType); // Adding the initial set of local variables
+
+         String statements = (String)n.f15.accept(this, (A)variables);
+         
+         String varDecls = "";
+         for(String varName : variables.keySet()) varDecls += variables.get(varName) + " " + varName + ";\n";
+
+         OUT("class " + className + " {");
+         OUT("public static void main(String[] " + n.f11.f0.tokenImage + ") {");
+         OUT(varDecls);
+         OUT(statements);
+         OUT("}");
       }
 
       return null;
@@ -184,11 +246,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       if(visit == 0)
       {
          ClassAttr classAttr = new ClassAttr(className, null);
-
-         parentMap.put(className, null);
          symbolTable.put(className, classAttr);
-         childrenMap.put(className, new ArrayList<String>());
-
          currClass = className;
          currMethod = null;
 
@@ -201,6 +259,21 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          currMethod = null;
 
          n.f4.accept(this, null);
+      }
+      else if(visit == 2)
+      {
+         currClass = className;
+         currMethod = null;
+
+         String classVarDecls = "";
+         for(String varName : symbolTable.get(className).classVars.keySet()) classVarDecls += symbolTable.get(className).classVars.get(varName).dataType + " " + varName + ";\n";
+
+         OUT("class " + className + " {");
+         OUT(classVarDecls);
+
+         n.f4.accept(this, null);
+
+         OUT("}");
       }
 
       return null;
@@ -224,12 +297,9 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       if(visit == 0)
       {
          ClassAttr classAttr = new ClassAttr(className, parentName);
-
-         parentMap.put(className, parentName);
          symbolTable.put(className, classAttr);
-         childrenMap.get(parentName).add(className);
-         childrenMap.put(className, new ArrayList<String>());
-         
+         if(symbolTable.containsKey(parentName)) symbolTable.get(parentName).children.add(className);
+         else childParentAddLater.put(parentName, className); // Add later
          currClass = className;
          currMethod = null;
 
@@ -242,6 +312,21 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          currMethod = null;
 
          n.f6.accept(this, null);
+      }
+      else if(visit == 2)
+      {
+         currClass = className;
+         currMethod = null;
+
+         String classVarDecls = "";
+         for(String varName : symbolTable.get(className).classVars.keySet()) classVarDecls += symbolTable.get(className).classVars.get(varName).dataType + " " + varName + ";\n";
+
+         OUT("class " + className + " extends " + parentName + " {");
+         OUT(classVarDecls);
+
+         n.f6.accept(this, null);
+
+         OUT("}");
       }
 
       return null;
@@ -283,10 +368,10 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
    public R visit(MethodDeclaration n, A argu) 
    {
       String methodName = n.f2.f0.tokenImage;
+      String returnType = (String)n.f1.accept(this, null);
 
       if(visit == 0)
       {
-         String returnType = (String)n.f1.accept(this, null);
          MethodAttr methodAttr = new MethodAttr(methodName, currClass, returnType);
          symbolTable.get(currClass).methods.put(methodName, methodAttr);
 
@@ -299,8 +384,37 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       {
          currMethod = methodName;
 
-         localStmtNumber = 0;
          n.f8.accept(this, null);
+      }
+      else if(visit == 2)
+      {
+         
+      }
+      else if(visit == 3) // Some function wants to inline this
+      {
+         InlineCallerInfo info = (InlineCallerInfo)argu;
+         
+         for(VarAttr varAttr : symbolTable.get(info.classVarType).methods.get(info.methodName).methodParams.values()) info.addVariable(varAttr);
+         for(VarAttr varAttr : symbolTable.get(info.classVarType).methods.get(info.methodName).methodVars.values()) info.addVariable(varAttr);
+
+         for(String varName : info.renamedVariables.keySet()) 
+         {
+            String type = getTypeSpecific(varName, info.classVarType, info.methodName);
+            String renamedVar = info.renamedVariables.get(varName);
+            symbolTable.get(currClass).methods.get(currMethod).allDeclaredVariables.put(renamedVar, type);
+         }
+
+         String printString = (String)n.f8.accept(this, (A)info);
+         String tempString = "";
+         if(info.setVar != null)
+         {
+            String varName = n.f10.f0.tokenImage;
+            if(symbolTable.get(info.classVarType).classVars.containsKey(varName)) tempString = (info.setVar = info.classVarName + "." + varName);
+         }
+
+         printString += tempString;
+
+         return (R)printString;
       }
 
       return null;
@@ -393,8 +507,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     */
    public R visit(Statement n, A argu) 
    {
-      n.f0.accept(this, argu);
-      return null;
+      return n.f0.accept(this, argu);
    }
 
    /**
@@ -404,8 +517,17 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     */
    public R visit(Block n, A argu) 
    {
-      n.f1.accept(this, argu);
-      return null;
+      if(visit == 2 || visit == 3)
+      {
+         String printString = "";
+         for (Node iterNode : n.f1.nodes) 
+         {
+            printString += (String)iterNode.accept(this, argu);
+         }
+         return (R)printString;
+      }
+
+      return n.f1.accept(this, argu);
    }
 
    /**
@@ -421,9 +543,19 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       if(visit == 1)
       {
          localStmtNumber++;
-         globalStmtNumber++;
 
          n.f2.accept(this, argu);
+      }
+      else if(visit == 2)
+      {
+         localStmtNumber++;
+      }
+      else if(visit == 3)
+      {
+         InlineCallerInfo info = (InlineCallerInfo)argu;
+         String renamedVar = info.renamedVariables.get(varName);
+         String exprString = (String)n.f2.accept(this, argu);
+         return (R)(renamedVar + " = " + exprString);
       }
 
       return null;
@@ -460,7 +592,6 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       if(visit == 1)
       {
          localStmtNumber++;
-         globalStmtNumber++;
       }
 
       return null;
@@ -483,7 +614,6 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       if(visit == 1)
       {
          localStmtNumber++;
-         globalStmtNumber++;
       }
 
       return null;
@@ -505,7 +635,6 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       if(visit == 1)
       {
          localStmtNumber++;
-         globalStmtNumber++;
 
          n.f4.accept(this, argu);
          n.f6.accept(this, argu);
@@ -528,8 +657,6 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       if(visit == 1)
       {
          localStmtNumber++;
-         globalStmtNumber++;
-
          n.f4.accept(this, argu);
       }
 
@@ -559,11 +686,6 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       if(visit == 1)
       {
          localStmtNumber++;
-         globalStmtNumber++;
-
-         n.f4.accept(this, argu);
-         n.f6.accept(this, argu);
-         n.f10.accept(this, argu);
          n.f12.accept(this, argu);
       }
 
@@ -584,7 +706,6 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       if(visit == 1)
       {
          localStmtNumber++;
-         globalStmtNumber++;
       }
 
       return null;
@@ -596,9 +717,15 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     */
    public R visit(MessageSendStatement n, A argu) 
    {
-      boolean inlineable = n.f0.present();
+      if(visit == 1)
+      {
+         localStmtNumber++;
 
-      // Currently here
+         boolean inlineable = n.f0.present();
+         MSReturn msReturn = (MSReturn)n.f1.accept(this, argu);
+
+         symbolTable.get(currClass).methods.get(currMethod).constructCallGraph(msReturn.className, msReturn.methodName, localStmtNumber, symbolTable, inlineable);
+      }
 
       return null;
    }
@@ -609,10 +736,12 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     */
    public R visit(VoidMessageSendStmt n, A argu) 
    {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      return _ret;
+      if(visit == 1)
+      {
+         return n.f0.accept(this, argu);
+      }
+
+      return null;
    }
 
    /**
@@ -621,13 +750,14 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f2 -> MessageSend()
     * f3 -> ";"
     */
-   public R visit(RetMessageSendStmt n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      return _ret;
+   public R visit(RetMessageSendStmt n, A argu) 
+   {
+      if(visit == 1)
+      {
+         return n.f2.accept(this, argu);
+      }
+
+      return null;
    }
 
    /**
@@ -757,15 +887,16 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f4 -> ( ArgList() )?
     * f5 -> ")"
     */
-   public R visit(MessageSend n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      n.f5.accept(this, argu);
-      return _ret;
+   public R visit(MessageSend n, A argu) 
+   {
+      if(visit == 1)
+      {
+         String className = (String)n.f0.accept(this, argu);
+         String methodName = n.f2.f0.tokenImage;
+
+         return (R)(new MSReturn(className, methodName));
+      }
+      return null;
    }
 
    /**
@@ -791,64 +922,73 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
    }
 
    /**
-    * f0 -> IntegerLiteral()
-    *       | TrueLiteral()
-    *       | FalseLiteral()
-    *       | Identifier()
-    *       | ThisExpression()
-    *       | ArrayAllocationExpression()
-    *       | AllocationExpression()
-    *       | NotExpression()
+    * f0 -> IntegerLiteral() 0
+    *       | TrueLiteral() 1
+    *       | FalseLiteral() 2
+    *       | Identifier() 3
+    *       | ThisExpression () 4
+    *       | ArrayAllocationExpression() 5
+    *       | AllocationExpression() 6
+    *       | NotExpression() 7
     */
-   public R visit(PrimaryExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(PrimaryExpression n, A argu) 
+   {
+      if(visit == 1)
+      {
+         if(n.f0.which == 6) return n.f0.accept(this, argu);
+         else if(n.f0.which == 4) return (R)(new String(currClass));
+         else if(n.f0.which == 3)
+         {
+            String varType = getType((String)n.f0.accept(this, argu));
+            return (R)(new String(varType));
+         }
+      }
+      else
+      {
+      
+      }
+
+      return null;
    }
 
    /**
     * f0 -> <INTEGER_LITERAL>
     */
-   public R visit(IntegerLiteral n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(IntegerLiteral n, A argu) 
+   {
+      return (R)(new String(n.f0.tokenImage));
    }
 
    /**
     * f0 -> "true"
     */
-   public R visit(TrueLiteral n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(TrueLiteral n, A argu) 
+   {
+      return (R)(new String("true"));
    }
 
    /**
     * f0 -> "false"
     */
-   public R visit(FalseLiteral n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(FalseLiteral n, A argu) 
+   {
+      return (R)(new String("false"));
    }
 
    /**
     * f0 -> <IDENTIFIER>
     */
-   public R visit(Identifier n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(Identifier n, A argu) 
+   {
+      return (R)(new String(n.f0.tokenImage));
    }
 
    /**
     * f0 -> "this"
     */
-   public R visit(ThisExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      return _ret;
+   public R visit(ThisExpression n, A argu) 
+   {
+      return (R)(new String("this"));
    }
 
    /**
@@ -858,14 +998,13 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f3 -> Identifier()
     * f4 -> "]"
     */
-   public R visit(ArrayAllocationExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      n.f4.accept(this, argu);
-      return _ret;
+   public R visit(ArrayAllocationExpression n, A argu) 
+   {
+      String arraySize = n.f3.f0.tokenImage;
+
+      if(visit == 2 || visit == 3) return (R)(new String("new int[" + arraySize + "]"));
+
+      return null;
    }
 
    /**
@@ -874,24 +1013,27 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f2 -> "("
     * f3 -> ")"
     */
-   public R visit(AllocationExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      n.f3.accept(this, argu);
-      return _ret;
+   public R visit(AllocationExpression n, A argu) 
+   {
+      String className = n.f1.f0.tokenImage;
+
+      if(visit == 1) return (R)(new String(className));
+      else if(visit == 2 || visit == 3) return (R)(new String("new " + className + "()"));
+
+      return null;
    }
 
    /**
     * f0 -> "!"
     * f1 -> Identifier()
     */
-   public R visit(NotExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      return _ret;
+   public R visit(NotExpression n, A argu) 
+   {
+      String varName = n.f1.f0.tokenImage;
+
+      if(visit == 2 || visit == 3) return (R)(new String("!" + varName));
+
+      return null;
    }
 
    /**
@@ -899,12 +1041,13 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
     * f1 -> "."
     * f2 -> Identifier()
     */
-   public R visit(DotExpression n, A argu) {
-      R _ret=null;
-      n.f0.accept(this, argu);
-      n.f1.accept(this, argu);
-      n.f2.accept(this, argu);
-      return _ret;
-   }
+   public R visit(DotExpression n, A argu) 
+   {
+      String varName = n.f0.f0.tokenImage;
+      String fieldName = n.f2.f0.tokenImage;
 
+      if(visit == 2 || visit == 3) return (R)(new String(varName + "." + fieldName));
+
+      return null;
+   }
 }

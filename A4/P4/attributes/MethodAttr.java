@@ -1,8 +1,8 @@
 package attributes;
 
 import java.util.LinkedHashMap;
-import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 
 public class MethodAttr 
 {
@@ -14,19 +14,22 @@ public class MethodAttr
     public int paramCount;
     public int localVarCount;
 
-    public HashMap<Integer, CallNode> callSites; // Indexed with global call site number (should be local ?)
+    public HashMap<String, String> allDeclaredVariables; // For final usage
+
+    public HashMap<Integer, CallNode> callGraph;
 
     public MethodAttr(String methodName, String className, String returnType)
     {
         this.methodName = methodName;
         this.className = className;
         this.methodParams = new LinkedHashMap<String, VarAttr>();
-        this.methodVars = new LinkedHashMap<String, VarAttr>();
+        this.methodVars = new HashMap<String, VarAttr>();
         this.returnType = returnType;
         this.paramCount = 0;
         this.localVarCount = 0;
+        this.callGraph = new HashMap<Integer, CallNode>(); 
 
-        this.callSites = new HashMap<Integer, CallNode>();
+        this.allDeclaredVariables = new HashMap<String, String>();
     }
 
     public void addMethodParam(String paramName, String paramType)
@@ -41,20 +44,66 @@ public class MethodAttr
         this.localVarCount++;
     }
 
-    public void addCallNode(int globalSiteNumber, int localSiteNumber, String methodName, String varType, boolean inlineable, HashMap<String, ClassAttr> symbolTable, HashMap<String, String> parentMap, HashMap<String, ArrayList<String>> childrenMap)
-    {   
-        boolean isValid = !(varType.equals("int") || varType.equals("int[]") || varType.equals("boolean"));
+    public void constructCallGraph(String className, String methodName, int siteIndex, HashMap<String, ClassAttr> symbolTable, boolean inlineable)
+    {
+        CallNode callNode = new CallNode();
 
-        if(isValid)
+        ClassAttr classAttr = symbolTable.get(className);
+        while(!classAttr.methods.containsKey(methodName) && classAttr.parentName != null) classAttr = symbolTable.get(classAttr.parentName);
+        callNode.callSigns.add(classAttr.methods.get(methodName));
+
+        classAttr = symbolTable.get(className);
+        for(String childName : classAttr.children) constructCallGraphHelper(childName, methodName, symbolTable, callNode);
+
+        callNode.inlineable = inlineable;
+        callNode.monomorphic = callNode.callSigns.size() == 1;
+        callNode.shouldInline = callNode.monomorphic && callNode.inlineable;
+
+        this.callGraph.put(siteIndex, callNode);
+    }
+
+    private void constructCallGraphHelper(String className, String methodName, HashMap<String, ClassAttr> symbolTable, CallNode callGraphEntry)
+    {
+        if(symbolTable.get(className).methods.containsKey(methodName)) callGraphEntry.callSigns.add(symbolTable.get(className).methods.get(methodName));
+
+        for(String childName: symbolTable.get(className).children) constructCallGraphHelper(childName, methodName, symbolTable, callGraphEntry);
+    }
+
+    public void checkRecursion()
+    {
+        for(CallNode callNode : this.callGraph.values())
         {
-            CallNode callNode = new CallNode(globalSiteNumber, localSiteNumber, methodName, inlineable);
-            callNode.addSignatures(varType, symbolTable, parentMap, childrenMap);
-            this.callSites.put(globalSiteNumber, callNode);
+            if(callNode.shouldInline)
+            {
+                HashSet<MethodAttr> visited = new HashSet<MethodAttr>();
+                if(checkRecursionHelper(callNode, visited)) callNode.shouldInline = false;
+            }
         }
-        else
+    }
+    public boolean checkRecursionHelper(CallNode callNode, HashSet<MethodAttr> visited)
+    {
+        if(callNode.callSigns.size() > 1) return false;
+    
+        MethodAttr toCall = callNode.callSigns.iterator().next();
+    
+        if(visited.contains(toCall)) return true;
+    
+        visited.add(toCall);
+    
+        for(CallNode nextCallNode : toCall.callGraph.values()) 
         {
-            System.out.println("Error: Invalid call to method " + methodName + " in class " + this.className + " from a primitive type variable");
-            System.exit(1);
+            if(nextCallNode.shouldInline && checkRecursionHelper(nextCallNode, visited)) return true;
         }
+    
+        visited.remove(toCall);
+    
+        return false;
+    }
+
+    public void printInfo()
+    {
+        System.out.println("Method: " + this.methodName + " in class: " + this.className);
+        
+        for(CallNode callNode: callGraph.values()) callNode.printInfo();
     }
 }
