@@ -2,12 +2,12 @@ package attributes;
 
 public class PrimaryReturn 
 {
-    public String expString;
+    public String exprString;
     public String dataType;
 
-    public PrimaryReturn(String expString, String dataType)
+    public PrimaryReturn(String exprString, String dataType)
     {
-        this.expString = expString;
+        this.exprString = exprString;
         this.dataType = dataType;
     }
 }

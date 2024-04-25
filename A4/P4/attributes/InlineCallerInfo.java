@@ -33,7 +33,7 @@ public class InlineCallerInfo
         this.arguments = new ArrayList<String>();
     }
 
-    public void addVariable(VarAttr varAttr)
+    public void addAndRenameVariable(VarAttr varAttr)
     {
         String varName = varAttr.varName;
         String varType = "";
@@ -41,7 +41,7 @@ public class InlineCallerInfo
         if(varAttr.varType == VarType.LOCALVAR) varType = "local";
         else if(varAttr.varType == VarType.PARAM) varType = "param";
 
-        String new_name = varName + "_" + this.methodName + "_" + this.callSiteIndex.toString() + "_" + this.depth.toString() + "_" + varType;
-        this.renamedVariables.put(varName, new_name);
+        String newVarName = varName + "_" + this.methodName + "_" + this.callSiteIndex.toString() + "_" + this.depth.toString() + "_" + varType;
+        this.renamedVariables.put(varName, newVarName);
     }
 }

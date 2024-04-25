@@ -5,6 +5,7 @@ import syntaxtree.*;
 import java.util.LinkedHashMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 
 public class MethodAttr 
 {
@@ -18,7 +19,7 @@ public class MethodAttr
     public int paramCount;
     public int localVarCount;
 
-    public HashMap<String, String> allDeclaredVariables; // For final usage
+    public HashMap<String, String> allDeclaredVariables; // For final usage : Variable Name -> Type
 
     public HashMap<Integer, CallNode> callGraph;
 
@@ -106,8 +107,12 @@ public class MethodAttr
 
     public void printInfo()
     {
-        System.out.println("Method: " + this.methodName + " in class: " + this.className);
+        System.err.println("Method: " + this.methodName + " in class: " + this.className);
         
-        for(CallNode callNode: callGraph.values()) callNode.printInfo();
+        for(Map.Entry<Integer, CallNode> entry: this.callGraph.entrySet())
+        {
+            System.err.println("  CallSite: " + entry.getKey());
+            entry.getValue().printInfo();
+        }
     }
 }

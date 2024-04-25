@@ -19,14 +19,14 @@ public class CallNode
 
     public void printInfo()
     {
-        System.out.println("CallNode:");
-        System.out.println("  Inlineable: " + this.inlineable);
-        System.out.println("  Monomorphic: " + this.monomorphic);
-        System.out.println("  ShouldInline: " + this.shouldInline);
-        System.out.println("  CallSigns:");
+        System.err.println("CallNode:");
+        System.err.println("  Inlineable: " + this.inlineable);
+        System.err.println("  Monomorphic: " + this.monomorphic);
+        System.err.println("  ShouldInline: " + this.shouldInline);
+        System.err.println("  CallSigns:");
         for(MethodAttr method : this.callSigns)
         {
-            System.out.println("    Method: " + method.methodName + " in class: " + method.className);
+            System.err.println("    Method: " + method.methodName + " in class: " + method.className);
         }
     }
 }
