@@ -1,11 +1,15 @@
 package attributes;
 
+import syntaxtree.*;
+
 import java.util.LinkedHashMap;
 import java.util.HashMap;
 import java.util.HashSet;
 
 public class MethodAttr 
 {
+    public Node methodNode;
+
     public String methodName;
     public String className;
     public LinkedHashMap<String, VarAttr> methodParams;
@@ -29,7 +33,7 @@ public class MethodAttr
         this.localVarCount = 0;
         this.callGraph = new HashMap<Integer, CallNode>(); 
 
-        this.allDeclaredVariables = new HashMap<String, String>();
+        this.allDeclaredVariables = new HashMap<String, String>(); // Variable Name -> Type
     }
 
     public void addMethodParam(String paramName, String paramType)
