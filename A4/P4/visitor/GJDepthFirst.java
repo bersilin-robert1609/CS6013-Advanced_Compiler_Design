@@ -73,9 +73,9 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
    String currClass;
    String currMethod;
 
-   String setVarGlobal = null;
-
    boolean DEBUG = true;
+
+   String setVarGlobal = null;
 
    void debugPrint(String s)
    {
@@ -87,22 +87,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       System.out.println(str);
    }
 
-   String getType(String varName)
-   {
-      if(symbolTable.get(currClass).methods.get(currMethod).methodVars.containsKey(varName)) 
-         return symbolTable.get(currClass).methods.get(currMethod).methodVars.get(varName).dataType;
-      else if(symbolTable.get(currClass).methods.get(currMethod).methodParams.containsKey(varName))
-         return symbolTable.get(currClass).methods.get(currMethod).methodParams.get(varName).dataType;
-      else if(symbolTable.get(currClass).classVars.containsKey(varName))
-         return symbolTable.get(currClass).classVars.get(varName).dataType;
-      else
-      {
-         assert(false);
-         return null; // Execution should never reach here
-      }
-   }
-
-   String getTypeSpecific(String varName, String className, String methodName)
+   String findType(String varName, String className, String methodName)
    {
       if(symbolTable.get(className).methods.get(methodName).methodVars.containsKey(varName)) 
          return symbolTable.get(className).methods.get(methodName).methodVars.get(varName).dataType;
@@ -117,10 +102,11 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       }
    }
 
-   String getNewName(InlineCallerInfo info, String varName)
+   String getName(InlineCallerInfo info, String varName)
    {
-      if(info.renamedVariables.containsKey(varName)) return info.renamedVariables.get(varName); // Method local or param
-      else return (info.classVarName + "." + varName); // Class Variable
+      if(info.renamedLocalVars.containsKey(varName)) return info.renamedLocalVars.get(varName);
+      else if(info.renamedParams.containsKey(varName)) return info.renamedParams.get(varName);
+      else return varName; // It is a class variable
    }
 
    //
@@ -152,7 +138,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
 
       for(ClassAttr classAttr : symbolTable.values()) classAttr.checkRecursion();
 
-      for(ClassAttr classAttr: symbolTable.values()) classAttr.printInfo();
+      // for(ClassAttr classAttr: symbolTable.values()) classAttr.printInfo();
 
       currClass = null; currMethod = null;
 
@@ -379,10 +365,10 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       
       if(visit == 0)
       {
+         currMethod = methodName;
          MethodAttr methodAttr = new MethodAttr(methodName, currClass, returnType);
          methodAttr.methodNode = n;
          symbolTable.get(currClass).methods.put(methodName, methodAttr);
-         currMethod = methodName;
 
          n.f4.accept(this, null);
          n.f7.accept(this, null);
@@ -430,20 +416,24 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          
          MethodAttr calleeMethodAttr = symbolTable.get(info.classVarType).methods.get(info.methodName);
          MethodAttr globalCallerMethodAttr = symbolTable.get(currClass).methods.get(currMethod);
-
-         if(globalCallerMethodAttr == null)
+         
+         for(VarAttr varAttr : calleeMethodAttr.methodParams.values()) info.addAndRenameParam(varAttr);
+         for(VarAttr varAttr : calleeMethodAttr.methodVars.values()) info.addAndRenameLocalvar(varAttr);
+         
+         // Adding the variables to the all declared variables of the global call
+         for(String varName : info.renamedLocalVars.keySet()) 
          {
-            debugPrint("Global caller method is null for " + currClass + " " + currMethod);
-            System.exit(1);
+            String type = findType(varName, info.classVarType, info.methodName);
+            String renamedVar = info.renamedLocalVars.get(varName);
+            
+            globalCallerMethodAttr.allDeclaredVariables.put(renamedVar, type);
          }
          
-         for(VarAttr varAttr : calleeMethodAttr.methodParams.values()) info.addAndRenameVariable(varAttr);
-         for(VarAttr varAttr : calleeMethodAttr.methodVars.values()) info.addAndRenameVariable(varAttr);
-         
-         for(String varName : info.renamedVariables.keySet()) 
+         // Adding the parameters to the all declared variables of the global call
+         for (String varName : info.renamedParams.keySet()) 
          {
-            String type = getTypeSpecific(varName, info.classVarType, info.methodName);
-            String renamedVar = info.renamedVariables.get(varName);
+            String type = findType(varName, info.classVarType, info.methodName);
+            String renamedVar = info.renamedParams.get(varName);
             
             globalCallerMethodAttr.allDeclaredVariables.put(renamedVar, type);
          }
@@ -453,15 +443,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          for(Node node: n.f8.nodes) stmtString += (String)node.accept(this, (A)info);
          printString += stmtString;
          
-         String returnString = ""; // For the return statement
-         debugPrint("Info setVar: " + info.setVar);
-         if(info.setVar != null)
-         {
-            String varName = getNewName(info, n.f10.f0.tokenImage);
-            returnString = info.setVar + " = " + varName + ";\n";
-         }
-
-         printString += returnString;
+         info._retString = getName(info, n.f10.f0.tokenImage);
 
          return (R)printString;
       }
@@ -604,7 +586,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          InlineCallerInfo info = (InlineCallerInfo)argu;
          info.localStmtNumber++;
 
-         String renamedVar = getNewName(info, varName);
+         String renamedVar = getName(info, varName);
          String exprString = (String)n.f2.accept(this, argu);
 
          return (R)(renamedVar + " = " + exprString + ";\n");
@@ -652,7 +634,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          InlineCallerInfo info = (InlineCallerInfo)(argu);
          info.localStmtNumber++;
 
-         return (R)(getNewName(info, varName) + " [ " + getNewName(info, arrayIndex) + " ] = " + getNewName(info, arrayValue) + ";\n");
+         return (R)(getName(info, varName) + " [ " + getName(info, arrayIndex) + " ] = " + getName(info, arrayValue) + ";\n");
       }
 
       return null;
@@ -687,7 +669,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          InlineCallerInfo info = (InlineCallerInfo)argu;
          info.localStmtNumber++;
 
-         return (R)(getNewName(info, varName) + "." + fieldName + " = " + getNewName(info, fieldValue) + ";\n");
+         return (R)(getName(info, varName) + "." + getName(info, fieldName) + " = " + getName(info, fieldValue) + ";\n");
       }
 
       return null;
@@ -730,7 +712,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          String ifStmt = (String)n.f4.accept(this, argu);
          String elseStmt = (String)n.f6.accept(this, argu);
 
-         return (R)("if(" + getNewName(info, condValue) + ") {\n" + ifStmt + "} else {\n" + elseStmt + "}");
+         return (R)("if(" + getName(info, condValue) + ") {\n" + ifStmt + "} else {\n" + elseStmt + "}");
       }
 
       return null;
@@ -767,7 +749,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
 
          String whileStmt = (String)n.f4.accept(this, argu);
 
-         return (R)("while(" + getNewName(info, condValue) + ") {\n" + whileStmt + "}");
+         return (R)("while(" + getName(info, condValue) + ") {\n" + whileStmt + "}");
       }
 
       return null;
@@ -820,7 +802,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          String updateExpr = (String)n.f10.accept(this, argu);
          String forStmt = (String)n.f12.accept(this, argu);
 
-         String printString = "for(" + getNewName(info, initValue) + " = " + initExpr + "; " + condExpr + "; " + getNewName(info, updateValue) + " = " + updateExpr + ") {\n" + forStmt + "}";
+         String printString = "for(" + getName(info, initValue) + " = " + initExpr + "; " + condExpr + "; " + getName(info, updateValue) + " = " + updateExpr + ") {\n" + forStmt + "}";
          return (R)printString;
       }
 
@@ -853,7 +835,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          InlineCallerInfo info = (InlineCallerInfo)argu;
          info.localStmtNumber++;
 
-         return (R)("System.out.println(" + getNewName(info, printValue) + ")" + ";\n");
+         return (R)("System.out.println(" + getName(info, printValue) + ")" + ";\n");
       }
 
       return null;
@@ -900,9 +882,10 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       if(visit == 1) return n.f0.accept(this, argu);
       else if(visit == 2 || visit == 3)
       {
+         String setVarOld = setVarGlobal;
          setVarGlobal = null;
          R _ret = n.f0.accept(this, argu);
-         setVarGlobal = null;
+         setVarGlobal = setVarOld;
          return _ret;
       }
       return null;
@@ -919,9 +902,11 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       if(visit == 1) return n.f2.accept(this, argu);
       else if(visit == 2 || visit == 3)
       {
+         String setVarOld = setVarGlobal;
          setVarGlobal = n.f0.f0.tokenImage;
+         if(visit == 3) setVarGlobal = getName((InlineCallerInfo)argu, setVarGlobal);
          R _ret = n.f2.accept(this, argu);
-         setVarGlobal = null;
+         setVarGlobal = setVarOld;
          return _ret;
       }
 
@@ -979,8 +964,8 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       else if(visit == 3)
       {
          InlineCallerInfo info = (InlineCallerInfo)argu;
-         String renamedVar1 = getNewName(info, var1);
-         String renamedVar2 = getNewName(info, var2);
+         String renamedVar1 = getName(info, var1);
+         String renamedVar2 = getName(info, var2);
 
          return (R)(renamedVar1 + " && " + renamedVar2);
       }
@@ -1002,8 +987,8 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       else if(visit == 3)
       {
          InlineCallerInfo info = (InlineCallerInfo)argu;
-         String renamedVar1 = getNewName(info, var1);
-         String renamedVar2 = getNewName(info, var2);
+         String renamedVar1 = getName(info, var1);
+         String renamedVar2 = getName(info, var2);
 
          return (R)(renamedVar1 + " < " + renamedVar2);
       }
@@ -1025,8 +1010,8 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       else if(visit == 3)
       {
          InlineCallerInfo info = (InlineCallerInfo)argu;
-         String renamedVar1 = getNewName(info, var1);
-         String renamedVar2 = getNewName(info, var2);
+         String renamedVar1 = getName(info, var1);
+         String renamedVar2 = getName(info, var2);
 
          return (R)(renamedVar1 + " + " + renamedVar2);
       }
@@ -1048,8 +1033,8 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       else if(visit == 3)
       {
          InlineCallerInfo info = (InlineCallerInfo)argu;
-         String renamedVar1 = getNewName(info, var1);
-         String renamedVar2 = getNewName(info, var2);
+         String renamedVar1 = getName(info, var1);
+         String renamedVar2 = getName(info, var2);
 
          return (R)(renamedVar1 + " - " + renamedVar2);
       }
@@ -1071,8 +1056,8 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       else if(visit == 3)
       {
          InlineCallerInfo info = (InlineCallerInfo)argu;
-         String renamedVar1 = getNewName(info, var1);
-         String renamedVar2 = getNewName(info, var2);
+         String renamedVar1 = getName(info, var1);
+         String renamedVar2 = getName(info, var2);
 
          return (R)(renamedVar1 + " * " + renamedVar2);
       }
@@ -1095,8 +1080,8 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       else if(visit == 3)
       {
          InlineCallerInfo info = (InlineCallerInfo)argu;
-         String renamedArrayName = getNewName(info, arrayName);
-         String renamedArrayIndex = getNewName(info, arrayIndex);
+         String renamedArrayName = getName(info, arrayName);
+         String renamedArrayIndex = getName(info, arrayIndex);
 
          return (R)(renamedArrayName + "[ " + renamedArrayIndex + " ]");
       }
@@ -1117,7 +1102,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       else if(visit == 3)
       {
          InlineCallerInfo info = (InlineCallerInfo)argu;
-         String renamedArrayName = getNewName(info, arrayName);
+         String renamedArrayName = getName(info, arrayName);
 
          return (R)(renamedArrayName + ".length");
       }
@@ -1146,12 +1131,6 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       {
          CallNode callNode = symbolTable.get(currClass).methods.get(currMethod).callGraph.get(localStmtNumber);
 
-         if(callNode == null)
-         {
-            debugPrint("CallNode is null for " + currClass + "." + currMethod + " at " + String.valueOf(localStmtNumber));
-            System.exit(1);
-         }
-
          PrimaryReturn exprReturn = (PrimaryReturn)n.f0.accept(this, argu);
          String methodName = n.f2.f0.tokenImage;
          ArrayList<String> argList = (ArrayList<String>)n.f4.accept(this, argu);
@@ -1159,33 +1138,35 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          
          if(callNode.shouldInline)
          {
+            MethodAttr methodToInline = callNode.callSigns.iterator().next();
+
             // Creating a new temporary variable for the primary expression
             String tempClassVarName = "__tempcaller__" + String.valueOf(1) + "_" + String.valueOf(localStmtNumber);
             
             // Creating the InlineCallerInfo object and setting arguments and the setVar
-            InlineCallerInfo info = new InlineCallerInfo(tempClassVarName, exprReturn.dataType, localStmtNumber, methodName, 1);
+            InlineCallerInfo info = new InlineCallerInfo(tempClassVarName, methodToInline.className, localStmtNumber, methodName, 1);
             info.arguments = argList;
-            info.setVar = setVarGlobal;
             
             // Adding the new variable to the set of declared variables
             symbolTable.get(currClass).methods.get(currMethod).allDeclaredVariables.put(tempClassVarName, exprReturn.dataType);
 
             // Making a visit to the inlined method
             visit = 3;
-            debugPrint("Inlined method: " + exprReturn.dataType + "." + methodName + " at " + String.valueOf(localStmtNumber));
-            String methodString = (String)symbolTable.get(exprReturn.dataType).methods.get(methodName).methodNode.accept(this, (A)info);
+            String methodString = (String)methodToInline.methodNode.accept(this, (A)info);
             visit = 2;
 
             // Getting the definitions inside the inlined function
             String varDefs = tempClassVarName + " = " + exprReturn.exprString + ";\n";
             int i = 0;
-            for(String param : symbolTable.get(exprReturn.dataType).methods.get(methodName).methodParams.keySet())
+            for(String param : symbolTable.get(methodToInline.className).methods.get(methodName).methodParams.keySet())
             {
-               varDefs += info.renamedVariables.get(param) + " = " + argList.get(i) + ";\n";
+               varDefs += info.renamedParams.get(param) + " = " + argList.get(i) + ";\n";
                i++;
             }
+            String returnString = "";
+            if(setVarGlobal != null) returnString = setVarGlobal + " = " + info._retString + ";\n";
 
-            String printString = "{\n" + varDefs + methodString + "}\n";
+            String printString = "{\n" + varDefs + methodString + returnString + "}\n";
             return (R)printString;
          }
          else
@@ -1207,13 +1188,8 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          PrimaryReturn exprReturn = (PrimaryReturn)n.f0.accept(this, argu);
          String methodName = n.f2.f0.tokenImage;
          ArrayList<String> argList = (ArrayList<String>)n.f4.accept(this, argu);
-         if(argList == null) argList = new ArrayList<String>();
 
-         if(callNode == null)
-         {
-            debugPrint("CallNode is null for " + info.classVarType + "." + info.methodName + " at " + String.valueOf(info.localStmtNumber));
-            System.exit(1);
-         }
+         if(argList == null) argList = new ArrayList<String>();
          
          if(callNode.shouldInline)
          {
@@ -1223,28 +1199,28 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
             // Creating the InlineCallerInfo object and setting arguments and the setVar
             InlineCallerInfo newInfo = new InlineCallerInfo(tempClassVarName, exprReturn.dataType, info.localStmtNumber, methodName, info.depth + 1);
             newInfo.arguments = argList;
-            newInfo.setVar = info.renamedVariables.get(setVarGlobal);
             
             // Adding the new variable to the set of declared variables
             symbolTable.get(currClass).methods.get(currMethod).allDeclaredVariables.put(tempClassVarName, exprReturn.dataType);
 
             // Making a visit to the inlined method          
-            String methodString = (String)symbolTable.get(exprReturn.dataType).methods.get(methodName).methodNode.accept(this, (A)newInfo);
+            Node methodToInline = callNode.callSigns.iterator().next().methodNode;
+            String methodString = (String)methodToInline.accept(this, (A)newInfo);
 
             // Getting the definitions inside the inlined function
-            String classVar = exprReturn.exprString;
-
-            if(info.renamedVariables.containsKey(classVar)) classVar = info.renamedVariables.get(classVar);
+            String classVar = exprReturn.exprString; // already renamed
 
             String varDefs = tempClassVarName + " = " + classVar + ";\n";
             int i = 0;
             for(String param : symbolTable.get(exprReturn.dataType).methods.get(methodName).methodParams.keySet())
             {
-               varDefs += newInfo.renamedVariables.get(param) + " = " + argList.get(i) + ";\n";
+               varDefs += newInfo.renamedParams.get(param) + " = " + getName(info, argList.get(i)) + ";\n";
                i++;
             }
+            String returnString = "";
+            if(setVarGlobal != null) returnString = setVarGlobal + " = " + newInfo._retString + ";\n"; // setVarGlobal is already renamed
 
-            String printString = "{\n" + varDefs + methodString + "}\n";
+            String printString = "{\n" + varDefs + methodString + returnString + "}\n";
             return (R)printString;
          }
          else
@@ -1254,11 +1230,9 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
             if(argString.length() > 0) argString = argString.substring(0, argString.length() - 2);
 
             String returnString = "";
-            if(setVarGlobal != null) returnString = getNewName(info, setVarGlobal) + " = ";
+            if(setVarGlobal != null) returnString = setVarGlobal + " = ";
 
-            String callVar = exprReturn.exprString;
-
-            if(info.renamedVariables.containsKey(callVar)) callVar = info.renamedVariables.get(callVar);
+            String callVar = exprReturn.exprString; // already renamed
 
             returnString += callVar + "." + methodName + "(" + argString + ");\n";
             return (R)returnString;
@@ -1312,7 +1286,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          else if(n.f0.which == 4) return (R)(new String(currClass));
          else if(n.f0.which == 3)
          {
-            String varType = getType((String)n.f0.accept(this, argu));
+            String varType = findType((String)n.f0.accept(this, null), currClass, currMethod);
             return (R)(new String(varType));
          }
       }
@@ -1335,13 +1309,17 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          {
             String varName = (String)n.f0.accept(this, argu);
             
-            if(visit == 2) dataType = getType(varName);
+            if(visit == 2) 
+            {
+               dataType = findType(varName, currClass, currMethod);
+               exprString = varName;
+            }
             else if(visit == 3)
             {
                InlineCallerInfo info = (InlineCallerInfo)argu;
-               dataType = getTypeSpecific(varName, info.classVarType, info.methodName);
+               dataType = findType(varName, info.classVarType, info.methodName);
+               exprString = getName(info, varName);
             }
-            exprString = varName;
          }
          else if(n.f0.which == 4)
          {
@@ -1431,7 +1409,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       else if(visit == 3)
       {
          InlineCallerInfo info = (InlineCallerInfo)argu;
-         String renamedArraySize = getNewName(info, arraySize);
+         String renamedArraySize = getName(info, arraySize);
 
          return (R)(new String("new int[ " + renamedArraySize + " ]"));
       }
@@ -1467,7 +1445,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       else if(visit == 3)
       {
          InlineCallerInfo info = (InlineCallerInfo)argu;
-         String renamedVar = getNewName(info, varName);
+         String renamedVar = getName(info, varName);
 
          return (R)(new String("! " + renamedVar));
       }
@@ -1489,7 +1467,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
       else if(visit == 3)
       {
          InlineCallerInfo info = (InlineCallerInfo)argu;
-         String renamedVar = getNewName(info, varName);
+         String renamedVar = getName(info, varName);
 
          return (R)(renamedVar + "." + fieldName);
       }
