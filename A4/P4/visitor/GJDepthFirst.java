@@ -669,7 +669,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          InlineCallerInfo info = (InlineCallerInfo)argu;
          info.localStmtNumber++;
 
-         return (R)(getName(info, varName) + "." + getName(info, fieldName) + " = " + getName(info, fieldValue) + ";\n");
+         return (R)(getName(info, varName) + "." + fieldName + " = " + getName(info, fieldValue) + ";\n");
       }
 
       return null;

@@ -76,32 +76,38 @@ public class MethodAttr
 
     public void checkRecursion()
     {
+        // For every call node in the method
         for(CallNode callNode : this.callGraph.values())
         {
             if(callNode.shouldInline)
             {
                 HashSet<MethodAttr> visited = new HashSet<MethodAttr>();
-                if(checkRecursionHelper(callNode, visited)) callNode.shouldInline = false;
+                
+                // Go through all the call signs of the call node
+                for(MethodAttr methodAttr : callNode.callSigns)
+                {
+                    visited.clear();
+                    if(checkRecursionHelper(visited, methodAttr)) callNode.shouldInline = false;
+                }
             }
         }
     }
-    public boolean checkRecursionHelper(CallNode callNode, HashSet<MethodAttr> visited)
+    public boolean checkRecursionHelper(HashSet<MethodAttr> visited, MethodAttr methodAttr)
     {
-        if(callNode.callSigns.size() > 1) return false;
-    
-        MethodAttr toCall = callNode.callSigns.iterator().next();
-    
-        if(visited.contains(toCall)) return true;
-    
-        visited.add(toCall);
-    
-        for(CallNode nextCallNode : toCall.callGraph.values()) 
+        if(visited.contains(methodAttr)) return true;
+        visited.add(methodAttr);
+
+        for(CallNode callNode : methodAttr.callGraph.values())
         {
-            if(nextCallNode.shouldInline && checkRecursionHelper(nextCallNode, visited)) return true;
+            if(callNode.shouldInline)
+            {
+                for(MethodAttr methodAttr2 : callNode.callSigns)
+                {
+                    if(checkRecursionHelper(visited, methodAttr2)) return true;
+                }
+            }
         }
-    
-        visited.remove(toCall);
-    
+
         return false;
     }
 
