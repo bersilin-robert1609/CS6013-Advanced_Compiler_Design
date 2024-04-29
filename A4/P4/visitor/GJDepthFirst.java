@@ -1226,7 +1226,7 @@ public class GJDepthFirst<R,A> implements GJVisitor<R,A> {
          else
          {
             String argString = "";
-            for(String arg : argList) argString += arg + ", ";
+            for(String arg : argList) argString += getName(info, arg) + ", ";
             if(argString.length() > 0) argString = argString.substring(0, argString.length() - 2);
 
             String returnString = "";
